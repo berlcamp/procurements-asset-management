@@ -4,6 +4,7 @@ import { formatUserTypeLabel } from "@/lib/constants";
 import { useAppSelector } from "@/lib/redux/hook";
 import { Package } from "lucide-react";
 import HeaderDropdown from "./HeaderDropdownMenu";
+import HeaderQuickAccessMenu from "./HeaderQuickAccessMenu";
 import { NotificationBell } from "./notifications/NotificationBell";
 import { Badge } from "./ui/badge";
 import { SidebarTrigger } from "./ui/sidebar";
@@ -27,6 +28,9 @@ export default function StickyHeader() {
       </div>
 
       <div className="flex-1"></div>
+
+      {/* Quick access menu */}
+      <HeaderQuickAccessMenu />
 
       {/* Notifications */}
       <NotificationBell />

@@ -8,15 +8,36 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAppSelector } from "@/lib/redux/hook";
+import { supabase } from "@/lib/supabase/client";
 import { Bell } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NotificationDropdown } from "./NotificationDropdown";
 
 export function NotificationBell() {
   const user = useAppSelector((state) => state.user.user);
-
+  const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const fetchUnreadCount = useCallback(async () => {
+    if (!user?.system_user_id) return;
+    const { count } = await supabase
+      .from("notifications")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.system_user_id)
+      .is("read_at", null);
+    setUnreadCount(count ?? 0);
+  }, [user?.system_user_id]);
+
+  useEffect(() => {
+    fetchUnreadCount();
+  }, [fetchUnreadCount]);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchUnreadCount();
+    }
+  }, [isOpen, fetchUnreadCount]);
 
   const handleClickOutside = useCallback(
     (event: MouseEvent) => {
@@ -27,24 +48,12 @@ export function NotificationBell() {
         setIsOpen(false);
       }
     },
-    []
+    [],
   );
 
   const handleEscape = useCallback((event: KeyboardEvent) => {
     if (event.key === "Escape") setIsOpen(false);
   }, []);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [isOpen, handleClickOutside, handleEscape]);
-
-  const unreadCount = 0;
 
   return (
     <div className="relative" ref={containerRef}>
@@ -68,6 +77,7 @@ export function NotificationBell() {
         <NotificationDropdown
           onClose={() => setIsOpen(false)}
           userId={user?.system_user_id}
+          onNotificationRead={fetchUnreadCount}
         />
       )}
     </div>

@@ -13,6 +13,7 @@ import {
   FileText,
   Gavel,
   Home,
+  Inbox,
   ListCheck,
   Loader2,
   Package,
@@ -72,7 +73,11 @@ export function AppSidebar() {
   const navItems = [{ title: "Home", url: "/home", icon: Home }];
 
   const planningItems = [
-    { title: "PPMP", url: "/planning/ppmp", icon: ListCheck },
+    {
+      title: "PPMP Submissions",
+      url: "/planning/ppmp-submissions",
+      icon: Inbox,
+    },
     { title: "APP", url: "/planning/app", icon: FileText },
   ];
 

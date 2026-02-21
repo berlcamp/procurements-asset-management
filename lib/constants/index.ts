@@ -5,22 +5,89 @@ export const userTypes = [
   "admin",
   "budget officer",
   "accounting officer",
+  "procurement officer",
   "bac chairperson",
+  "bac vice chairperson",
+  "bac secretariat",
   "bac member",
   "schools division superintendent",
   "supply officer - division",
   "supply officer - school",
   "section chief",
   "division staff",
+  "school staff",
 ] as const;
 
 /** User type derived from constants - use this for type annotations */
 export type UserType = (typeof userTypes)[number];
 
+/** User types that belong to the BAC (Bids and Awards Committee) */
+export const bacUserTypes = [
+  "bac chairperson",
+  "bac vice chairperson",
+  "bac member",
+  "bac secretariat",
+] as const;
+export type BacUserType = (typeof bacUserTypes)[number];
+
+/** User types that can submit PPMP to HOPE (Secretariat, Chairperson, Vice Chairperson - NOT bac member) */
+export const bacSubmitterToHopeTypes = [
+  "bac chairperson",
+  "bac vice chairperson",
+  "bac secretariat",
+] as const;
+
+/** Returns true if the user type is a BAC member */
+export function isBacUser(type: string | undefined): boolean {
+  return type != null && (bacUserTypes as readonly string[]).includes(type);
+}
+
+/** Returns true if the user type can submit PPMP to HOPE (BAC Secretariat, Chairperson, Vice Chairperson) */
+export function isBacSubmitterToHope(type: string | undefined): boolean {
+  return (
+    type != null &&
+    (bacSubmitterToHopeTypes as readonly string[]).includes(type)
+  );
+}
+
+/** Returns true if the user type is Budget Officer */
+export function isBudgetOfficer(type: string | undefined): boolean {
+  return type === "budget officer";
+}
+
+/** Returns true if the user type is HOPE (Schools Division Superintendent) */
+export function isHope(type: string | undefined): boolean {
+  return type === "schools division superintendent";
+}
+
 /** User types that can access the staff management page */
 export const staffAccessTypes = ["admin", "super admin"] as const;
 
 export type StaffAccessType = (typeof staffAccessTypes)[number];
+
+/** User types that require a school (school_id set, office_id null) */
+export const schoolUserTypes = [
+  "supply officer - school",
+  "school staff",
+] as const;
+
+/** User types that require an office (office_id set, school_id null) */
+export const divisionUserTypes = [
+  "supply officer - division",
+  "division staff",
+] as const;
+
+/** Returns true if the user type requires school selection */
+export function isSchoolUserType(type: string | undefined): boolean {
+  return type != null && (schoolUserTypes as readonly string[]).includes(type);
+}
+
+/** Returns true if the user type requires office selection */
+export function isDivisionUserType(type: string | undefined): boolean {
+  return (
+    type != null && (divisionUserTypes as readonly string[]).includes(type)
+  );
+}
 
 /** Returns true if the user type has staff management access */
 export function hasStaffAccess(type: string | undefined): boolean {
@@ -34,3 +101,23 @@ export function formatUserTypeLabel(type: string): string {
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(" ");
 }
+
+/** PPMP project types */
+export const PPMP_PROJECT_TYPES = [
+  "goods",
+  "infrastructure",
+  "consulting_services",
+] as const;
+export type PPMPProjectType = (typeof PPMP_PROJECT_TYPES)[number];
+
+/** PPMP procurement modes */
+export const PPMP_PROCUREMENT_MODES = [
+  "competitive bidding",
+  "negotiated procurement",
+  "small value procurement",
+  "direct contracting",
+  "repeat order",
+  "agency to agency",
+  "others",
+] as const;
+export type PPMPProcurementMode = (typeof PPMP_PROCUREMENT_MODES)[number];

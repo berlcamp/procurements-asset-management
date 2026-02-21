@@ -91,7 +91,7 @@ export default function LoginBox({ message }: LoginBoxProps) {
               Procurement and Assets Management System
             </CardTitle>
             <CardDescription className="text-base font-medium text-slate-600 dark:text-slate-400">
-              Department of Education - Schools Division of Bayugan City
+              Schools Division of Bayugan City
             </CardDescription>
             <p className="text-sm text-slate-500 dark:text-slate-400 pt-1">
               Sign in to access your account

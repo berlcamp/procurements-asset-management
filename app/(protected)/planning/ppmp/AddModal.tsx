@@ -1,4 +1,3 @@
-// components/AddItemTypeModal.tsx
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -13,13 +12,11 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -27,66 +24,50 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  formatUserTypeLabel,
-  isDivisionUserType,
-  isSchoolUserType,
-  userTypes,
-  type UserType,
-} from "@/lib/constants";
-import { useAppDispatch } from "@/lib/redux/hook";
+import { useAppDispatch, useAppSelector } from "@/lib/redux/hook";
 import { addItem, updateList } from "@/lib/redux/listSlice";
 import { supabase } from "@/lib/supabase/client";
-import { Office, School, User } from "@/types/database";
+import { Office, PPMP, School } from "@/types/database";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
 import { z } from "zod";
 
-// Always update this on other pages
-type ItemType = User;
-const table = "users";
-const title = "Staff";
+type ItemType = PPMP;
+const table = "ppmp";
+const title = "PPMP";
 
-interface ModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  editData?: ItemType | null; // Optional prop for editing existing item
-}
+const currentYear = new Date().getFullYear();
+const FISCAL_YEARS = [currentYear + 1, currentYear, currentYear - 1, currentYear - 2];
 
 const FormSchema = z
   .object({
-    name: z.string().min(1, "Name is required"),
-    email: z
-      .string()
-      .min(1, "Email is required")
-      .email("Please enter a valid email address"),
-    type: z.enum(userTypes, {
-      required_error: "Staff type is required",
+    fiscal_year: z.number({ required_error: "Fiscal year is required" }),
+    end_user_type: z.enum(["school", "office"], {
+      required_error: "End user type is required",
     }),
-    designation: z.string().optional(),
     school_id: z.union([z.string(), z.number()]).optional().nullable(),
     office_id: z.union([z.string(), z.number()]).optional().nullable(),
   })
   .superRefine((data, ctx) => {
-    if (isSchoolUserType(data.type)) {
+    if (data.end_user_type === "school") {
       const id = data.school_id;
       if (id == null || id === "" || id === undefined) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["school_id"],
-          message: "School is required for this staff type",
+          message: "School is required",
         });
       }
     }
-    if (isDivisionUserType(data.type)) {
+    if (data.end_user_type === "office") {
       const id = data.office_id;
       if (id == null || id === "" || id === undefined) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["office_id"],
-          message: "Office is required for this staff type",
+          message: "Office is required",
         });
       }
     }
@@ -94,40 +75,38 @@ const FormSchema = z
 
 type FormType = z.infer<typeof FormSchema>;
 
+interface ModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  editData?: ItemType | null;
+}
+
 export const AddModal = ({ isOpen, onClose, editData }: ModalProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [schools, setSchools] = useState<School[]>([]);
   const [offices, setOffices] = useState<Office[]>([]);
 
   const dispatch = useAppDispatch();
+  const user = useAppSelector((state) => state.user.user);
 
-  const editType = editData?.type;
   const form = useForm<FormType>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
-      name: editData ? editData.name : "",
-      email: editData ? editData.email : "",
-      type:
-        editType && userTypes.includes(editType as UserType)
-          ? (editType as UserType)
-          : undefined,
-      designation: editData?.designation ?? "",
-      school_id: editData?.school_id ?? null,
-      office_id: editData?.office_id ?? null,
+      fiscal_year: currentYear,
+      end_user_type: undefined,
+      school_id: null,
+      office_id: null,
     },
   });
 
-  const selectedType = form.watch("type");
+  const selectedType = form.watch("end_user_type");
 
   useEffect(() => {
     if (!selectedType) return;
-    if (isSchoolUserType(selectedType)) {
+    if (selectedType === "school") {
       form.setValue("office_id", null);
-    } else if (isDivisionUserType(selectedType)) {
+    } else if (selectedType === "office") {
       form.setValue("school_id", null);
-    } else {
-      form.setValue("school_id", null);
-      form.setValue("office_id", null);
     }
   }, [selectedType, form]);
 
@@ -144,42 +123,60 @@ export const AddModal = ({ isOpen, onClose, editData }: ModalProps) => {
     fetchOptions();
   }, [isOpen]);
 
-  // Submit handler
+  useEffect(() => {
+    if (isOpen && editData) {
+      form.reset({
+        fiscal_year: editData.fiscal_year,
+        end_user_type: editData.end_user_type,
+        school_id: editData.school_id ?? null,
+        office_id: editData.office_id ?? null,
+      });
+    } else if (isOpen) {
+      form.reset({
+        fiscal_year: currentYear,
+        end_user_type: undefined,
+        school_id: user?.school_id != null ? user.school_id : null,
+        office_id: user?.office_id != null ? user.office_id : null,
+      });
+      if (user?.school_id != null) {
+        form.setValue("end_user_type", "school");
+      } else if (user?.office_id != null) {
+        form.setValue("end_user_type", "office");
+      }
+    }
+  }, [form, editData, isOpen, user?.school_id, user?.office_id]);
+
   const onSubmit = async (data: FormType) => {
-    if (isSubmitting) return; // 🚫 Prevent double-submit
+    if (isSubmitting) return;
     setIsSubmitting(true);
 
     try {
-      const newData: Record<string, string | number | null | undefined> = {
-        name: data.name.trim(),
-        email: data.email.trim().toLowerCase(),
-        type: data.type,
-        designation: data.designation?.trim() || null,
+      const payload: Record<string, string | number | null> = {
+        fiscal_year: data.fiscal_year,
+        end_user_type: data.end_user_type,
         school_id: null,
         office_id: null,
       };
 
-      if (isSchoolUserType(data.type) && data.school_id != null && data.school_id !== "") {
-        newData.school_id = Number(data.school_id);
-        newData.office_id = null;
-      } else if (isDivisionUserType(data.type) && data.office_id != null && data.office_id !== "") {
-        newData.office_id = Number(data.office_id);
-        newData.school_id = null;
+      if (data.end_user_type === "school" && data.school_id != null && data.school_id !== "") {
+        payload.school_id = Number(data.school_id);
+        payload.office_id = null;
+      } else if (data.end_user_type === "office" && data.office_id != null && data.office_id !== "") {
+        payload.office_id = Number(data.office_id);
+        payload.school_id = null;
       }
 
-      // Insert or Update logic
       if (editData?.id) {
         const { error } = await supabase
           .from(table)
-          .update(newData)
+          .update(payload)
           .eq("id", editData.id);
 
         if (error) throw new Error(error.message);
 
-        // ✅ Fetch updated record
         const { data: updated } = await supabase
           .from(table)
-          .select()
+          .select("*, school:schools!school_id(id, name), office:offices!office_id(id, name)")
           .eq("id", editData.id)
           .single();
 
@@ -188,47 +185,33 @@ export const AddModal = ({ isOpen, onClose, editData }: ModalProps) => {
         }
 
         onClose();
-        toast.success("Staff member updated successfully!");
+        toast.success("PPMP updated successfully!");
       } else {
         const { data: inserted, error } = await supabase
           .from(table)
-          .insert([newData])
-          .select()
+          .insert([payload])
+          .select("*, school:schools!school_id(id, name), office:offices!office_id(id, name)")
           .single();
 
         if (error) {
-          if (error.code === "23505") toast.error("Email already exists");
+          if (error.code === "23505") {
+            toast.error("A PPMP already exists for this fiscal year and end user.");
+            return;
+          }
           throw new Error(error.message);
         }
 
         dispatch(addItem(inserted));
         onClose();
-        toast.success("Staff member added successfully!");
+        toast.success("PPMP created successfully!");
       }
     } catch (err) {
       console.error("Submission error:", err);
-      toast.error(err instanceof Error ? err.message : "Error saving user");
+      toast.error(err instanceof Error ? err.message : "Error saving PPMP");
     } finally {
       setIsSubmitting(false);
     }
   };
-
-  useEffect(() => {
-    if (isOpen) {
-      const currentEditType = editData?.type;
-      form.reset({
-        name: editData?.name || "",
-        email: editData?.email || "",
-        type:
-          currentEditType && userTypes.includes(currentEditType as UserType)
-            ? (currentEditType as UserType)
-            : undefined,
-        designation: editData?.designation ?? "",
-        school_id: editData?.school_id ?? null,
-        office_id: editData?.office_id ?? null,
-      });
-    }
-  }, [form, editData, isOpen]);
 
   const handleClose = () => {
     if (!isSubmitting) {
@@ -246,8 +229,8 @@ export const AddModal = ({ isOpen, onClose, editData }: ModalProps) => {
           </DialogTitle>
           <DialogDescription>
             {editData
-              ? "Update staff member information below."
-              : "Fill in the details to add a new staff member."}
+              ? "Update the Project Procurement Management Plan."
+              : "Create a new PPMP for a fiscal year and end user."}
           </DialogDescription>
         </DialogHeader>
 
@@ -255,79 +238,30 @@ export const AddModal = ({ isOpen, onClose, editData }: ModalProps) => {
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
             <FormField
               control={form.control}
-              name="name"
+              name="fiscal_year"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-sm font-medium">
-                    Staff Name <span className="text-red-500">*</span>
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="Enter full name"
-                      className="h-10"
-                      {...field}
-                      disabled={isSubmitting}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">
-                    Email Address <span className="text-red-500">*</span>
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      type="email"
-                      placeholder="staff@example.com"
-                      className="h-10"
-                      {...field}
-                      disabled={isSubmitting}
-                    />
-                  </FormControl>
-                  <FormDescription className="text-xs">
-                    This email will be used for login authentication.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="type"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">
-                    Staff Type <span className="text-red-500">*</span>
+                    Fiscal Year <span className="text-red-500">*</span>
                   </FormLabel>
                   <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
+                    onValueChange={(v) => field.onChange(Number(v))}
+                    value={field.value != null ? String(field.value) : ""}
                     disabled={isSubmitting}
                   >
                     <FormControl>
                       <SelectTrigger className="h-10">
-                        <SelectValue placeholder="Select staff type" />
+                        <SelectValue placeholder="Select fiscal year" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {userTypes.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {formatUserTypeLabel(type)}
+                      {FISCAL_YEARS.map((year) => (
+                        <SelectItem key={year} value={String(year)}>
+                          {year}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <FormDescription className="text-xs">
-                    Select the role/type for this staff member.
-                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -335,27 +269,33 @@ export const AddModal = ({ isOpen, onClose, editData }: ModalProps) => {
 
             <FormField
               control={form.control}
-              name="designation"
+              name="end_user_type"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-sm font-medium">
-                    Designation
+                    End User Type <span className="text-red-500">*</span>
                   </FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="e.g. Teacher, Clerk"
-                      className="h-10"
-                      {...field}
-                      value={field.value ?? ""}
-                      disabled={isSubmitting}
-                    />
-                  </FormControl>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value ?? ""}
+                    disabled={isSubmitting}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="h-10">
+                        <SelectValue placeholder="Select School or Office" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="school">School</SelectItem>
+                      <SelectItem value="office">Office</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            {isSchoolUserType(selectedType) && (
+            {selectedType === "school" && (
               <FormField
                 control={form.control}
                 name="school_id"
@@ -388,7 +328,7 @@ export const AddModal = ({ isOpen, onClose, editData }: ModalProps) => {
               />
             )}
 
-            {isDivisionUserType(selectedType) && (
+            {selectedType === "office" && (
               <FormField
                 control={form.control}
                 name="office_id"
@@ -421,7 +361,7 @@ export const AddModal = ({ isOpen, onClose, editData }: ModalProps) => {
               />
             )}
 
-            <DialogFooter className="gap-2 sm:gap-2 space-x-2">
+            <DialogFooter className="gap-2 space-x-2 sm:gap-2">
               <Button
                 type="button"
                 variant="outline"

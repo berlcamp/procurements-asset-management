@@ -116,7 +116,7 @@ export const Filter = ({
               </SelectContent>
             </Select>
           </div>
-          {(keyword || type) && (
+          {(keyword || type !== "all") && (
             <div className="flex justify-end">
               <Button
                 size="sm"
