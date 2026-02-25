@@ -13,10 +13,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CURRENT_FISCAL_YEAR } from "@/lib/constants";
 import { Filter as FilterIcon, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
-const FISCAL_YEARS = [2026, 2025, 2024, 2023];
+const FISCAL_YEARS = [
+  CURRENT_FISCAL_YEAR + 1,
+  CURRENT_FISCAL_YEAR,
+  CURRENT_FISCAL_YEAR - 1,
+  CURRENT_FISCAL_YEAR - 2,
+];
 
 export type PPMPFilter = {
   fiscalYear?: number;

@@ -9,13 +9,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Grid3X3, ListCheck } from "lucide-react";
+import { ClipboardList, Grid3X3, ListCheck } from "lucide-react";
 import Link from "next/link";
 
 const quickAccessSections = [
   {
     title: "Procurement Planning",
-    items: [{ title: "PPMP", url: "/planning/ppmp", icon: ListCheck }],
+    items: [
+      { title: "PPMP", url: "/planning/ppmp", icon: ListCheck },
+      {
+        title: "Purchase Request",
+        url: "/planning/purchaserequests",
+        icon: ClipboardList,
+      },
+    ],
   },
 ];
 

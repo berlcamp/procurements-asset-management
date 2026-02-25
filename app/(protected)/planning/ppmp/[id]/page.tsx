@@ -1,6 +1,7 @@
 "use client";
 
 import { ConfirmationModal } from "@/components/ConfirmationModal";
+import { RemarksCell } from "@/components/RemarksCell";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,8 +19,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  bacUserTypes,
+  formatPPMPStatusLabel,
   formatUserTypeLabel,
+  isBacSecretariat,
   isBacSubmitterToHope,
   isBacUser,
   isBudgetOfficer,
@@ -28,6 +30,7 @@ import {
 import { useAppSelector } from "@/lib/redux/hook";
 import { supabase } from "@/lib/supabase/client";
 import type {
+  App,
   PPMP,
   PPMPAuditLog,
   PPMPBacApproval,
@@ -35,12 +38,14 @@ import type {
   PPMPRow,
   PPMPRowLot,
   PPMPRowLotItem,
+  PPMPRowRemarkRow,
 } from "@/types/database";
 import {
   ArrowLeft,
   ArrowLeftToLine,
   Building2,
   Check,
+  ClipboardList,
   FileText,
   History,
   MoreVertical,
@@ -54,7 +59,10 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { CreatePRModal, getItemKey } from "../CreatePRModal";
 import { AddRowWizardModal } from "../AddRowWizardModal";
+
+type PPMPRowWithRemarks = PPMPRow & { ppmp_row_remarks?: PPMPRowRemarkRow[] };
 
 const PROJECT_TYPE_LABELS: Record<string, string> = {
   goods: "Goods",
@@ -62,30 +70,60 @@ const PROJECT_TYPE_LABELS: Record<string, string> = {
   consulting_services: "Consulting Services",
 };
 
-function formatItemsDisplay(lots: PPMPRowLot[] | null | undefined): string {
-  if (!lots || lots.length === 0) return "-";
-  return lots
-    .map((lot, lotIdx) => {
-      const lotName = lot.name?.trim() || `Lot ${lotIdx + 1}`;
-      const items = lot.items ?? [];
-      if (items.length === 0) return `${lotName}: (no items)`;
-      const itemsStr = items
-        .map((item: PPMPRowLotItem) => {
-          const desc = item.description?.trim() || "-";
-          const qty = item.quantity != null ? item.quantity : "-";
-          const unit = item.unit?.trim() || "";
-          const cost =
-            item.estimated_cost != null
-              ? item.estimated_cost.toLocaleString("en-PH", {
-                  minimumFractionDigits: 2,
-                })
-              : "-";
-          return `${desc} (${qty}${unit ? ` ${unit}` : ""}) — PhP ${cost}`;
-        })
-        .join("; ");
-      return `${lotName}: ${itemsStr}`;
-    })
-    .join(" | ");
+function LotsItemsCell({
+  lots,
+  itemsInPRs,
+}: {
+  lots: PPMPRowLot[];
+  itemsInPRs: Set<string>;
+}) {
+  if (!lots || lots.length === 0)
+    return <span className="text-muted-foreground">-</span>;
+  return (
+    <span className="block text-xs leading-relaxed space-y-1">
+      {lots.map((lot, lotIdx) => {
+        const lotName = lot.name?.trim() || `Lot ${lotIdx + 1}`;
+        const items = lot.items ?? [];
+        if (items.length === 0)
+          return (
+            <span key={lotIdx} className="block">
+              {lotName}: (no items)
+            </span>
+          );
+        return (
+          <span key={lotIdx} className="block">
+            {lotName}:{" "}
+            {(items as PPMPRowLotItem[]).map((item, itemIdx) => {
+              const key = getItemKey(lotIdx, itemIdx);
+              const inPR = itemsInPRs.has(key);
+              const desc = item.description?.trim() || "-";
+              const qty = item.quantity != null ? item.quantity : "-";
+              const unit = item.unit?.trim() || "";
+              const cost =
+                item.estimated_cost != null
+                  ? item.estimated_cost.toLocaleString("en-PH", {
+                      minimumFractionDigits: 2,
+                    })
+                  : "-";
+              const text = `${desc} (${qty}${unit ? ` ${unit}` : ""}) — PhP ${cost}`;
+              return (
+                <span key={itemIdx}>
+                  {itemIdx > 0 && "; "}
+                  {inPR ? (
+                    <span className="rounded bg-green-100 px-1 dark:bg-green-900/30 text-green-800 dark:text-green-200">
+                      {text}
+                    </span>
+                  ) : (
+                    text
+                  )}
+                </span>
+              );
+            })}
+          </span>
+        );
+      })}
+    </span>
+  );
 }
 
 function formatDate(d: string | null | undefined): string {
@@ -139,7 +177,10 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
 };
 
 function formatAuditAction(action: string): string {
-  return AUDIT_ACTION_LABELS[action] ?? action.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return (
+    AUDIT_ACTION_LABELS[action] ??
+    action.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+  );
 }
 
 function isUnitHead(
@@ -164,13 +205,12 @@ export default function PPMPDetailPage() {
   const systemUserId = user?.system_user_id as number | undefined;
 
   const [ppmp, setPpmp] = useState<PPMP | null>(null);
-  const [rows, setRows] = useState<PPMPRow[]>([]);
+  const [rows, setRows] = useState<PPMPRowWithRemarks[]>([]);
   const [loading, setLoading] = useState(true);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<PPMPRow | null>(null);
   const [submitModalOpen, setSubmitModalOpen] = useState(false);
   const [submitToBudgetModalOpen, setSubmitToBudgetModalOpen] = useState(false);
-  const [submitToBACModalOpen, setSubmitToBACModalOpen] = useState(false);
   const [submitToHopeModalOpen, setSubmitToHopeModalOpen] = useState(false);
   const [returnModalOpen, setReturnModalOpen] = useState(false);
   const [approveModalOpen, setApproveModalOpen] = useState(false);
@@ -178,7 +218,6 @@ export default function PPMPDetailPage() {
     | "returned"
     | "returned_to_unit_head"
     | "returned_to_budget"
-    | "returned_to_bac"
     | null
   >(null);
   const [returnRemarks, setReturnRemarks] = useState("");
@@ -188,6 +227,11 @@ export default function PPMPDetailPage() {
   const [bacApprovals, setBacApprovals] = useState<PPMPBacApproval[]>([]);
   const [approvingUserId, setApprovingUserId] = useState<number | null>(null);
   const [auditLog, setAuditLog] = useState<PPMPAuditLog[]>([]);
+  const [appApproval, setAppApproval] = useState<App | null>(null);
+  const [prItemsByRow, setPrItemsByRow] = useState<Map<number, Set<string>>>(
+    new Map()
+  );
+  const [createPRRow, setCreatePRRow] = useState<PPMPRow | null>(null);
 
   const logAudit = useCallback(
     async (params: {
@@ -238,12 +282,12 @@ export default function PPMPDetailPage() {
 
     const { data: rowsData, error: rowsError } = await supabase
       .from("ppmp_rows")
-      .select("*")
+      .select("*, ppmp_row_remarks(id, text, role, created_at)")
       .eq("ppmp_id", id)
       .order("created_at", { ascending: true });
 
     if (!rowsError) {
-      setRows((rowsData as PPMPRow[]) ?? []);
+      setRows((rowsData as PPMPRowWithRemarks[]) ?? []);
     }
     setPpmp(ppmpData as PPMP);
 
@@ -277,6 +321,41 @@ export default function PPMPDetailPage() {
       setBacApprovals([]);
     }
 
+    // Fetch APP approval for fiscal year
+    const fiscalYear = (ppmpData as PPMP)?.fiscal_year;
+    if (fiscalYear) {
+      const { data: appData } = await supabase
+        .from("app")
+        .select("*")
+        .eq("fiscal_year", fiscalYear)
+        .maybeSingle();
+      setAppApproval((appData as App | null) ?? null);
+    } else {
+      setAppApproval(null);
+    }
+
+    // Fetch purchase_request_items for this PPMP's rows to highlight items in PRs
+    const rowIds = (rowsData as { id: number }[] ?? []).map((r) => r.id);
+    if (rowIds.length > 0) {
+      const { data: priData } = await supabase
+        .from("purchase_request_items")
+        .select("ppmp_row_id, lot_index, item_index")
+        .in("ppmp_row_id", rowIds);
+      const byRow = new Map<number, Set<string>>();
+      for (const pri of priData ?? []) {
+        const r = pri as {
+          ppmp_row_id: number;
+          lot_index: number;
+          item_index: number;
+        };
+        if (!byRow.has(r.ppmp_row_id)) byRow.set(r.ppmp_row_id, new Set());
+        byRow.get(r.ppmp_row_id)!.add(getItemKey(r.lot_index, r.item_index));
+      }
+      setPrItemsByRow(byRow);
+    } else {
+      setPrItemsByRow(new Map());
+    }
+
     setLoading(false);
   }, [id, router]);
 
@@ -290,7 +369,13 @@ export default function PPMPDetailPage() {
   };
 
   const handleEditRowSuccess = (row: PPMPRow) => {
-    setRows((prev) => prev.map((r) => (r.id === row.id ? row : r)));
+    setRows((prev) =>
+      prev.map((r) =>
+        r.id === row.id
+          ? { ...row, ppmp_row_remarks: r.ppmp_row_remarks ?? [] }
+          : r,
+      ),
+    );
     setEditingRow(null);
   };
 
@@ -358,13 +443,12 @@ export default function PPMPDetailPage() {
   };
 
   const handleSubmitToBudget = async () => {
-    if (
-      !ppmp ||
-      !["submitted", "returned_to_unit_head"].includes(ppmp.status)
-    )
+    if (!ppmp || !["submitted", "returned_to_unit_head"].includes(ppmp.status))
       return;
     const fromStatus =
-      ppmp.status === "returned_to_unit_head" ? "returned_to_unit_head" : "submitted";
+      ppmp.status === "returned_to_unit_head"
+        ? "returned_to_unit_head"
+        : "submitted";
     const { error } = await supabase
       .from("ppmp")
       .update({
@@ -413,65 +497,17 @@ export default function PPMPDetailPage() {
     toast.success("PPMP submitted to Budget Officer successfully.");
   };
 
-  const handleSubmitToBAC = async () => {
+  const handleSubmitToHope = async () => {
     if (
       !ppmp ||
-      !["submitted_to_budget", "returned_to_budget"].includes(ppmp.status)
+      ![
+        "submitted_to_budget",
+        "returned_to_budget",
+        "submitted_to_bac",
+        "returned_to_bac",
+      ].includes(ppmp.status)
     )
       return;
-    const fromStatus = ppmp.status;
-    const { error } = await supabase
-      .from("ppmp")
-      .update({
-        status: "submitted_to_bac",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", ppmp.id);
-    if (error) {
-      toast.error(error.message);
-      throw error;
-    }
-    await logAudit({
-      action: "submit_to_bac",
-      fromStatus,
-      toStatus: "submitted_to_bac",
-    });
-    refreshAuditLog();
-    setPpmp((prev) =>
-      prev
-        ? {
-            ...prev,
-            status: "submitted_to_bac",
-            updated_at: new Date().toISOString(),
-          }
-        : null,
-    );
-
-    const { data: bacUsers } = await supabase
-      .from("users")
-      .select("id, name, type")
-      .eq("is_active", true)
-      .in("type", bacUserTypes);
-    if (bacUsers?.length) {
-      const endUserLabel = getEndUserLabel(ppmp);
-      const ppmpLink = `/planning/ppmp/${ppmp.id}`;
-      await supabase.from("notifications").insert(
-        bacUsers.map((u) => ({
-          user_id: u.id,
-          type: "ppmp_submitted_to_bac",
-          title: "New PPMP submitted to BAC",
-          message: `PPMP for FY${ppmp.fiscal_year} — ${endUserLabel} requires your review.`,
-          link: ppmpLink,
-        })),
-      );
-      setBacMembers(bacUsers as { id: number; name: string; type: string }[]);
-      setBacApprovals([]);
-    }
-    toast.success("PPMP submitted to BAC successfully.");
-  };
-
-  const handleSubmitToHope = async () => {
-    if (!ppmp || ppmp.status !== "submitted_to_bac") return;
     const { error } = await supabase
       .from("ppmp")
       .update({
@@ -485,7 +521,7 @@ export default function PPMPDetailPage() {
     }
     await logAudit({
       action: "submit_to_hope",
-      fromStatus: "submitted_to_bac",
+      fromStatus: ppmp.status,
       toStatus: "submitted_to_hope",
     });
     refreshAuditLog();
@@ -639,23 +675,6 @@ export default function PPMPDetailPage() {
           })),
         );
       }
-    } else if (returnAction === "returned_to_bac") {
-      const { data: bacUsers } = await supabase
-        .from("users")
-        .select("id")
-        .eq("is_active", true)
-        .in("type", bacUserTypes);
-      if (bacUsers?.length) {
-        await supabase.from("notifications").insert(
-          bacUsers.map((u) => ({
-            user_id: u.id,
-            type: "ppmp_returned_to_bac",
-            title: "PPMP returned to BAC",
-            message: `PPMP FY${ppmp.fiscal_year} — ${endUserLabel} was returned by HOPE and requires BAC review.`,
-            link: ppmpLink,
-          })),
-        );
-      }
     }
 
     setReturnModalOpen(false);
@@ -701,6 +720,20 @@ export default function PPMPDetailPage() {
 
   const isBacMember = isBacUser(user?.type);
   const bacApprovalByUser = new Map(bacApprovals.map((a) => [a.user_id, a]));
+
+  const appApproved = appApproval?.approved_at != null;
+  const isProjectCreator =
+    ppmp?.created_by != null && ppmp.created_by === systemUserId;
+  const canCreatePR =
+    ppmp?.status === "approved_by_hope" &&
+    appApproved &&
+    isProjectCreator &&
+    systemUserId != null;
+
+  const canBacSecretariatEditRows =
+    (ppmp?.status === "submitted_to_bac" ||
+      ppmp?.status === "returned_to_bac") &&
+    isBacSecretariat(user?.type);
 
   const handleBacApprove = async () => {
     if (
@@ -765,8 +798,8 @@ export default function PPMPDetailPage() {
                 <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
                 PPMP — FY {ppmp.fiscal_year}
               </h1>
-              <span className="inline-flex w-fit items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-primary/10 text-primary">
-                {ppmp.status || "draft"}
+              <span className="inline-flex w-fit items-center rounded-full border border-green-300 bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:border-green-700 dark:bg-green-900/50 dark:text-green-300">
+                {formatPPMPStatusLabel(ppmp.status ?? "draft")}
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -855,7 +888,7 @@ export default function PPMPDetailPage() {
                   className="shadow-sm border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/50"
                 >
                   <ArrowLeftToLine className="mr-1.5 h-4 w-4" />
-                  Return to Creator
+                  Return to Proponent
                 </Button>
               </div>
             )}
@@ -866,11 +899,11 @@ export default function PPMPDetailPage() {
                 <Button
                   variant="blue"
                   size="sm"
-                  onClick={() => setSubmitToBACModalOpen(true)}
+                  onClick={() => setSubmitToHopeModalOpen(true)}
                   className="shadow-sm ring-1 ring-blue-600/20 hover:ring-blue-600/40"
                 >
                   <Send className="mr-1.5 h-4 w-4" />
-                  Submit to BAC
+                  Submit to HOPE
                 </Button>
                 <Button
                   variant="outline"
@@ -895,24 +928,6 @@ export default function PPMPDetailPage() {
                 >
                   <Send className="mr-1.5 h-4 w-4" />
                   Submit to HOPE
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => openReturnModal("returned_to_budget")}
-                  className="shadow-sm border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/50"
-                >
-                  <ArrowLeftToLine className="mr-1.5 h-4 w-4" />
-                  Return to Budget
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => openReturnModal("returned")}
-                  className="shadow-sm border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/50"
-                >
-                  <ArrowLeftToLine className="mr-1.5 h-4 w-4" />
-                  Return to Creator
                 </Button>
               </div>
             )}
@@ -943,20 +958,10 @@ export default function PPMPDetailPage() {
                 className="shadow-sm border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/50"
               >
                 <ArrowLeftToLine className="mr-1.5 h-4 w-4" />
-                Return to Creator
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => openReturnModal("returned_to_bac")}
-                className="shadow-sm border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/50"
-              >
-                <ArrowLeftToLine className="mr-1.5 h-4 w-4" />
-                Return to BAC
+                Return to Proponent
               </Button>
             </div>
           )}
-          
         </div>
       </div>
 
@@ -1090,7 +1095,10 @@ export default function PPMPDetailPage() {
                     <th className="app__table_th">Procurement</th>
                     <th className="app__table_th">Budget & Funding</th>
                     <th className="app__table_th">Remarks</th>
-                    {ppmp.status === "draft" && (
+                    {canCreatePR && (
+                      <th className="app__table_th_right">PR</th>
+                    )}
+                    {(ppmp.status === "draft" || canBacSecretariatEditRows) && (
                       <th className="app__table_th_right">Actions</th>
                     )}
                   </tr>
@@ -1112,11 +1120,10 @@ export default function PPMPDetailPage() {
                         </div>
                       </td>
                       <td className="app__table_td">
-                        <span className="block text-xs leading-relaxed">
-                          {formatItemsDisplay(
-                            Array.isArray(row.items) ? row.items : [],
-                          )}
-                        </span>
+                        <LotsItemsCell
+                          lots={Array.isArray(row.items) ? row.items : []}
+                          itemsInPRs={prItemsByRow.get(row.id) ?? new Set()}
+                        />
                       </td>
                       <td className="app__table_td">
                         <span className="block text-xs leading-relaxed">
@@ -1129,13 +1136,37 @@ export default function PPMPDetailPage() {
                         </span>
                       </td>
                       <td className="app__table_td">
-                        <span className="block text-xs leading-relaxed">
-                          {row.remarks?.filter(Boolean).length
-                            ? row.remarks.filter(Boolean).join("; ") || "-"
-                            : "-"}
-                        </span>
+                        <RemarksCell
+                          remarks={row.ppmp_row_remarks ?? []}
+                          variant="ppmp_row"
+                          parentId={row.id}
+                          onRemarkAdded={fetchData}
+                          canAddRemark={
+                            ppmp.status === "draft" || canBacSecretariatEditRows
+                          }
+                        />
                       </td>
-                      {ppmp.status === "draft" && (
+                      {canCreatePR && (
+                        <td className="app__table_td_actions">
+                          {row.app_status === "approved" ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setCreatePRRow(row)}
+                              className="gap-1.5"
+                            >
+                              <ClipboardList className="h-4 w-4" />
+                              Create PR
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              —
+                            </span>
+                          )}
+                        </td>
+                      )}
+                      {(ppmp.status === "draft" ||
+                        canBacSecretariatEditRows) && (
                         <td className="app__table_td_actions">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -1159,13 +1190,15 @@ export default function PPMPDetailPage() {
                                 <Pencil className="mr-2 h-4 w-4" />
                                 Edit
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleDeleteRow(row)}
-                                className="cursor-pointer text-destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
-                              </DropdownMenuItem>
+                              {ppmp.status === "draft" && (
+                                <DropdownMenuItem
+                                  onClick={() => handleDeleteRow(row)}
+                                  className="cursor-pointer text-destructive"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </td>
@@ -1201,9 +1234,11 @@ export default function PPMPDetailPage() {
                     </span>
                     <span className="text-muted-foreground">·</span>
                     <span className="text-muted-foreground">
-                      {entry.from_status && entry.to_status && entry.from_status !== entry.to_status
+                      {entry.from_status &&
+                      entry.to_status &&
+                      entry.from_status !== entry.to_status
                         ? `${entry.from_status} → ${entry.to_status}`
-                        : entry.to_status ?? entry.action}
+                        : (entry.to_status ?? entry.action)}
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
@@ -1221,6 +1256,17 @@ export default function PPMPDetailPage() {
           )}
         </div>
       </div>
+
+      {createPRRow && systemUserId != null && (
+        <CreatePRModal
+          isOpen={!!createPRRow}
+          onClose={() => setCreatePRRow(null)}
+          row={createPRRow}
+          itemsAlreadyInPRs={prItemsByRow.get(createPRRow.id) ?? new Set()}
+          systemUserId={systemUserId}
+          onSuccess={fetchData}
+        />
+      )}
 
       <AddRowWizardModal
         isOpen={wizardOpen}
@@ -1253,18 +1299,6 @@ export default function PPMPDetailPage() {
           <p className="text-sm text-muted-foreground">
             Submit this PPMP to the Budget Officer for review? This will notify
             the Budget Officer.
-          </p>
-        }
-      />
-
-      <ConfirmationModal
-        isOpen={submitToBACModalOpen}
-        onClose={() => setSubmitToBACModalOpen(false)}
-        onConfirm={handleSubmitToBAC}
-        message={
-          <p className="text-sm text-muted-foreground">
-            Submit this PPMP to the BAC for review? This will change the status
-            to submitted_to_bac.
           </p>
         }
       />
@@ -1311,9 +1345,7 @@ export default function PPMPDetailPage() {
                   ? "Return PPMP to Unit Head"
                   : returnAction === "returned_to_budget"
                     ? "Return PPMP to Budget"
-                    : returnAction === "returned_to_bac"
-                      ? "Return PPMP to BAC"
-                      : "Return PPMP"}
+                    : "Return PPMP"}
             </DialogTitle>
             <p className="text-sm text-muted-foreground">
               Remarks are required when returning a PPMP. Explain what should be
@@ -1352,14 +1384,12 @@ export default function PPMPDetailPage() {
               disabled={!returnRemarks.trim()}
             >
               {returnAction === "returned"
-                ? "Return to Creator"
+                ? "Return to Proponent"
                 : returnAction === "returned_to_unit_head"
                   ? "Return to Unit Head"
                   : returnAction === "returned_to_budget"
                     ? "Return to Budget"
-                    : returnAction === "returned_to_bac"
-                      ? "Return to BAC"
-                      : "Return"}
+                    : "Return"}
             </Button>
           </DialogFooter>
         </DialogContent>

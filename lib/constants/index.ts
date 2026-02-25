@@ -1,5 +1,10 @@
 export const PER_PAGE = 10;
 
+/** Current fiscal year - set via NEXT_PUBLIC_CURRENT_FISCAL_YEAR in .env.local. Basis for PPMP and APP creation. */
+export const CURRENT_FISCAL_YEAR = Number(
+  process.env.NEXT_PUBLIC_CURRENT_FISCAL_YEAR ?? new Date().getFullYear(),
+);
+
 export const userTypes = [
   "super admin",
   "admin",
@@ -16,6 +21,7 @@ export const userTypes = [
   "section chief",
   "division staff",
   "school staff",
+  "school head",
 ] as const;
 
 /** User type derived from constants - use this for type annotations */
@@ -50,6 +56,11 @@ export function isBacSubmitterToHope(type: string | undefined): boolean {
   );
 }
 
+/** Returns true if the user type is BAC Secretariat */
+export function isBacSecretariat(type: string | undefined): boolean {
+  return type === "bac secretariat";
+}
+
 /** Returns true if the user type is Budget Officer */
 export function isBudgetOfficer(type: string | undefined): boolean {
   return type === "budget officer";
@@ -68,6 +79,7 @@ export type StaffAccessType = (typeof staffAccessTypes)[number];
 /** User types that require a school (school_id set, office_id null) */
 export const schoolUserTypes = [
   "supply officer - school",
+  "school head",
   "school staff",
 ] as const;
 
@@ -77,16 +89,30 @@ export const divisionUserTypes = [
   "division staff",
 ] as const;
 
+/** Account types derived from user type */
+export const accountTypes = ["school", "office"] as const;
+export type AccountType = (typeof accountTypes)[number];
+
+/** Returns account_type: 'school' for supply officer - school | school staff, else 'office' */
+export function getAccountType(type: string | undefined): AccountType {
+  return isSchoolUserType(type) ? "school" : "office";
+}
+
 /** Returns true if the user type requires school selection */
 export function isSchoolUserType(type: string | undefined): boolean {
   return type != null && (schoolUserTypes as readonly string[]).includes(type);
 }
 
-/** Returns true if the user type requires office selection */
+/** Returns true if the user type requires office selection (account_type = 'office') */
 export function isDivisionUserType(type: string | undefined): boolean {
   return (
     type != null && (divisionUserTypes as readonly string[]).includes(type)
   );
+}
+
+/** Returns true if account_type = 'office' (requires office_id) */
+export function isOfficeAccountType(type: string | undefined): boolean {
+  return type != null && getAccountType(type) === "office";
 }
 
 /** Returns true if the user type has staff management access */
@@ -98,6 +124,15 @@ export function hasStaffAccess(type: string | undefined): boolean {
 export function formatUserTypeLabel(type: string): string {
   return type
     .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
+/** Formats a PPMP status for display (e.g. "submitted_to_bac" → "Submitted to BAC") */
+export function formatPPMPStatusLabel(status: string): string {
+  const s = status || "draft";
+  return s
+    .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(" ");
 }

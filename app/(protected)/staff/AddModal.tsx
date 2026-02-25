@@ -29,7 +29,8 @@ import {
 } from "@/components/ui/select";
 import {
   formatUserTypeLabel,
-  isDivisionUserType,
+  getAccountType,
+  isOfficeAccountType,
   isSchoolUserType,
   userTypes,
   type UserType,
@@ -80,7 +81,7 @@ const FormSchema = z
         });
       }
     }
-    if (isDivisionUserType(data.type)) {
+    if (isOfficeAccountType(data.type)) {
       const id = data.office_id;
       if (id == null || id === "" || id === undefined) {
         ctx.addIssue({
@@ -123,7 +124,7 @@ export const AddModal = ({ isOpen, onClose, editData }: ModalProps) => {
     if (!selectedType) return;
     if (isSchoolUserType(selectedType)) {
       form.setValue("office_id", null);
-    } else if (isDivisionUserType(selectedType)) {
+    } else if (isOfficeAccountType(selectedType)) {
       form.setValue("school_id", null);
     } else {
       form.setValue("school_id", null);
@@ -154,15 +155,24 @@ export const AddModal = ({ isOpen, onClose, editData }: ModalProps) => {
         name: data.name.trim(),
         email: data.email.trim().toLowerCase(),
         type: data.type,
+        account_type: getAccountType(data.type),
         designation: data.designation?.trim() || null,
         school_id: null,
         office_id: null,
       };
 
-      if (isSchoolUserType(data.type) && data.school_id != null && data.school_id !== "") {
+      if (
+        isSchoolUserType(data.type) &&
+        data.school_id != null &&
+        data.school_id !== ""
+      ) {
         newData.school_id = Number(data.school_id);
         newData.office_id = null;
-      } else if (isDivisionUserType(data.type) && data.office_id != null && data.office_id !== "") {
+      } else if (
+        isOfficeAccountType(data.type) &&
+        data.office_id != null &&
+        data.office_id !== ""
+      ) {
         newData.office_id = Number(data.office_id);
         newData.school_id = null;
       }
@@ -305,7 +315,7 @@ export const AddModal = ({ isOpen, onClose, editData }: ModalProps) => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-sm font-medium">
-                    Staff Type <span className="text-red-500">*</span>
+                    User Role <span className="text-red-500">*</span>
                   </FormLabel>
                   <Select
                     onValueChange={field.onChange}
@@ -388,14 +398,15 @@ export const AddModal = ({ isOpen, onClose, editData }: ModalProps) => {
               />
             )}
 
-            {isDivisionUserType(selectedType) && (
+            {isOfficeAccountType(selectedType) && (
               <FormField
                 control={form.control}
                 name="office_id"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-sm font-medium">
-                      Office <span className="text-red-500">*</span>
+                      Functional Division{" "}
+                      <span className="text-red-500">*</span>
                     </FormLabel>
                     <Select
                       onValueChange={(v) => field.onChange(v === "" ? null : v)}

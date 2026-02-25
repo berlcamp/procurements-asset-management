@@ -3,6 +3,7 @@
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { Button } from "@/components/ui/button";
 import {
+  formatPPMPStatusLabel,
   isBacUser,
   isBudgetOfficer,
   isHope,
@@ -18,6 +19,27 @@ type PPMPWithHead = PPMP & {
   school?: { id: number; name: string; head_user_id?: number | null };
   office?: { id: number; name: string; head_user_id?: number | null };
 };
+
+function getStatusBadgeClass(status: string): string {
+  const s = status || "draft";
+  const base =
+    "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset";
+  if (s === "approved_by_hope")
+    return `${base} bg-green-50 text-green-700 ring-green-200 dark:bg-green-950/50 dark:text-green-300 dark:ring-green-800`;
+  if (
+    s === "submitted" ||
+    s === "submitted_to_budget" ||
+    s === "submitted_to_bac" ||
+    s === "submitted_to_hope" ||
+    s === "returned_to_unit_head" ||
+    s === "returned_to_budget" ||
+    s === "returned_to_bac"
+  )
+    return `${base} bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:ring-blue-800`;
+  if (s === "returned" || s === "draft")
+    return `${base} bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:ring-amber-800`;
+  return `${base} bg-primary/10 text-primary`;
+}
 
 function getEndUserLabel(item: PPMPWithHead): string {
   if (item.end_user_type === "school" && item.school?.name) {
@@ -123,7 +145,9 @@ export default function PPMPSubmissionsPage() {
             <div className="app__empty_state_icon">
               <FileText className="mx-auto h-12 w-12" />
             </div>
-            <p className="app__empty_state_title">No PPMPs require your action</p>
+            <p className="app__empty_state_title">
+              No PPMPs require your action
+            </p>
             <p className="app__empty_state_description">
               {systemUserId == null
                 ? "Sign in to see PPMPs submitted to you."
@@ -144,6 +168,7 @@ export default function PPMPSubmissionsPage() {
                   <tr>
                     <th className="app__table_th">Fiscal Year</th>
                     <th className="app__table_th">End User</th>
+                    <th className="app__table_th">Status</th>
                     <th className="app__table_th">Submitted</th>
                     <th className="app__table_th_right">Actions</th>
                   </tr>
@@ -176,6 +201,16 @@ export default function PPMPSubmissionsPage() {
                               : "Office"}
                           </span>
                         </div>
+                      </td>
+                      <td className="app__table_td">
+                        <span
+                          className={getStatusBadgeClass(
+                            item.status ?? "draft",
+                          )}
+                          title={formatPPMPStatusLabel(item.status ?? "draft")}
+                        >
+                          {formatPPMPStatusLabel(item.status ?? "draft")}
+                        </span>
                       </td>
                       <td className="app__table_td">
                         <span className="text-sm text-muted-foreground">

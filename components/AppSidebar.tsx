@@ -93,7 +93,7 @@ export function AppSidebar() {
   const procurementExecutionItems = [
     {
       title: "Purchase Requests (PR)",
-      url: "/procurement-execution/purchase-requests",
+      url: "/planning/purchaserequests",
       icon: ClipboardList,
     },
     {

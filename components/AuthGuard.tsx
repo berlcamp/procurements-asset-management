@@ -1,5 +1,6 @@
 "use client";
 
+import { getAccountType } from "@/lib/constants";
 import { setUser } from "@/lib/redux/userSlice";
 import { supabase } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
@@ -48,7 +49,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
             system_user_id: systemUser.id,
             name: systemUser.name,
             type: systemUser.type,
+            account_type:
+              systemUser.account_type ?? getAccountType(systemUser.type),
             school_id: systemUser.school_id,
+            office_id: systemUser.office_id,
           }),
         );
       } catch (error) {

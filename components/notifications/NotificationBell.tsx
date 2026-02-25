@@ -27,7 +27,7 @@ export function NotificationBell() {
       .eq("user_id", user.system_user_id)
       .is("read_at", null);
     setUnreadCount(count ?? 0);
-  }, [user?.system_user_id]);
+  }, [user]);
 
   useEffect(() => {
     fetchUnreadCount();
@@ -54,6 +54,17 @@ export function NotificationBell() {
   const handleEscape = useCallback((event: KeyboardEvent) => {
     if (event.key === "Escape") setIsOpen(false);
   }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("keydown", handleEscape);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isOpen, handleClickOutside, handleEscape]);
 
   return (
     <div className="relative" ref={containerRef}>

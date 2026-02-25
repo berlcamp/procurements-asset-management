@@ -36,9 +36,10 @@ export default function PPMPPage() {
       setLoading(true);
       let query = supabase
         .from("ppmp")
-        .select("*, school:schools!school_id(id, name), office:offices!office_id(id, name)", {
-          count: "exact",
-        });
+        .select(
+          "*, school:schools!school_id(id, name), office:offices!office_id(id, name), ppmp_rows(app_status)",
+          { count: "exact" },
+        );
 
       if (filter.fiscalYear != null) {
         query = query.eq("fiscal_year", filter.fiscalYear);

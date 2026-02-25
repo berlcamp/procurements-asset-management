@@ -214,6 +214,7 @@ export const AddRowWizardModal = ({
             ? (editData.remarks as string[])
             : [""],
       });
+      setAttachmentFiles([]);
     } else {
       form.reset({
         general_description: "",
@@ -315,10 +316,12 @@ export const AddRowWizardModal = ({
         procurement_end_date: toDateValue(data.procurement_end_date),
         delivery_period: toDateValue(data.delivery_period),
         source_of_funds: data.source_of_funds || null,
-        estimated_budget:
-          data.estimated_budget !== "" && data.estimated_budget != null
-            ? Number(data.estimated_budget)
-            : null,
+        estimated_budget: (() => {
+          const val = data.estimated_budget;
+          if (val === "" || val == null) return null;
+          const num = Number(val);
+          return !Number.isNaN(num) && Number.isFinite(num) ? num : null;
+        })(),
         attachments,
         remarks: (data.remarks ?? []).filter((r) => r.trim().length > 0),
       };
@@ -987,7 +990,11 @@ export const AddRowWizardModal = ({
                   <Button
                     type="button"
                     variant="green"
-                    onClick={goNext}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      goNext();
+                    }}
                     disabled={isSubmitting}
                     className="h-10"
                   >

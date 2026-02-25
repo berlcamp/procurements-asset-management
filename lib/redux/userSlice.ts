@@ -6,6 +6,7 @@ interface ExtendedUser extends User {
   system_user_id?: number;
   name?: string;
   type?: string;
+  account_type?: "school" | "office" | null;
   school_id?: string | number | null;
   office_id?: string | number | null;
 }
