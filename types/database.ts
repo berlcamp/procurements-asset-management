@@ -94,6 +94,7 @@ export interface PPMP {
   updated_at: string;
   school?: { id: number; name: string; head_user_id?: number | null };
   office?: { id: number; name: string; head_user_id?: number | null };
+  creator?: { id: number; name: string } | null;
 }
 
 export interface Notification {

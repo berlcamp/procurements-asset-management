@@ -43,15 +43,14 @@ import type {
 import {
   ArrowLeft,
   ArrowLeftToLine,
-  Building2,
   Check,
   ClipboardList,
   FileText,
   History,
+  MessageSquare,
   MoreVertical,
   Pencil,
   Plus,
-  School,
   Send,
   Trash2,
 } from "lucide-react";
@@ -214,6 +213,8 @@ export default function PPMPDetailPage() {
   const [submitToHopeModalOpen, setSubmitToHopeModalOpen] = useState(false);
   const [returnModalOpen, setReturnModalOpen] = useState(false);
   const [approveModalOpen, setApproveModalOpen] = useState(false);
+  const [auditLogModalOpen, setAuditLogModalOpen] = useState(false);
+  const [showRemarks, setShowRemarks] = useState(false);
   const [returnAction, setReturnAction] = useState<
     | "returned"
     | "returned_to_unit_head"
@@ -269,7 +270,7 @@ export default function PPMPDetailPage() {
     const { data: ppmpData, error: ppmpError } = await supabase
       .from("ppmp")
       .select(
-        "*, school:schools!school_id(id, name, head_user_id), office:offices!office_id(id, name, head_user_id)",
+        "*, school:schools!school_id(id, name, head_user_id), office:offices!office_id(id, name, head_user_id), creator:users!created_by(id, name)",
       )
       .eq("id", id)
       .single();
@@ -802,23 +803,20 @@ export default function PPMPDetailPage() {
                 {formatPPMPStatusLabel(ppmp.status ?? "draft")}
               </span>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-foreground">
-                {getEndUserLabel(ppmp)}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+              <span>
+                <span className="text-muted-foreground">Creator:</span>{" "}
+                <span className="font-medium text-foreground">
+                  {ppmp.creator?.name ?? "-"}
+                </span>
               </span>
-              <span
-                className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${
-                  ppmp.end_user_type === "school"
-                    ? "bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:ring-blue-800"
-                    : "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:ring-amber-800"
-                }`}
-              >
-                {ppmp.end_user_type === "school" ? (
-                  <School className="h-3.5 w-3.5" />
-                ) : (
-                  <Building2 className="h-3.5 w-3.5" />
-                )}
-                {ppmp.end_user_type === "school" ? "School" : "Office"}
+              <span>
+                <span className="text-muted-foreground">Office:</span>{" "}
+                <span className="font-medium text-foreground">
+                  {ppmp.end_user_type === "office" && ppmp.office?.name
+                    ? ppmp.office.name
+                    : "-"}
+                </span>
               </span>
             </div>
           </div>
@@ -1032,39 +1030,6 @@ export default function PPMPDetailPage() {
               </ul>
             </div>
           )}
-        {(ppmp.remarks as PPMPRemark[] | undefined)?.length ? (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
-            <h3 className="mb-2 text-sm font-semibold text-amber-800 dark:text-amber-200">
-              PPMP Remarks
-            </h3>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              {(ppmp.remarks as PPMPRemark[]).map((r, idx) => (
-                <li key={idx} className="flex flex-col gap-0.5">
-                  <span>
-                    <span className="font-medium text-foreground">
-                      {r.role === "unit_head"
-                        ? "Unit Head"
-                        : r.role === "budget_officer"
-                          ? "Budget Officer"
-                          : r.role === "bac"
-                            ? "BAC"
-                            : r.role === "hope"
-                              ? "HOPE"
-                              : (r.role ?? "Reviewer")}
-                      :
-                    </span>{" "}
-                    {r.text}
-                  </span>
-                  {r.created_at && (
-                    <span className="text-xs opacity-70">
-                      {formatDate(r.created_at)}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
         {rows.length === 0 ? (
           <div className="app__empty_state">
             <p className="app__empty_state_title">No procurement rows yet</p>
@@ -1211,50 +1176,63 @@ export default function PPMPDetailPage() {
           </div>
         )}
 
-        {/* Audit Trail - bottom section */}
-        <div className="mt-6 rounded-lg border bg-muted/30 p-4">
-          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-            <History className="h-4 w-4 text-muted-foreground" />
-            Audit Trail
-          </h3>
-          {auditLog.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No actions recorded yet.
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {auditLog.map((entry) => (
-                <li
-                  key={entry.id}
-                  className="flex flex-col gap-0.5 rounded-md border-l-2 border-muted-foreground/30 bg-background/50 px-3 py-2 text-sm"
-                >
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        {/* Audit Trail & Remarks buttons */}
+        <div className="mt-6 flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAuditLogModalOpen(true)}
+            className="gap-2"
+          >
+            <History className="h-4 w-4" />
+            Show Logs
+          </Button>
+          {(ppmp.remarks as PPMPRemark[] | undefined)?.length ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowRemarks((v) => !v)}
+              className={`gap-2 ${showRemarks ? "bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700" : ""}`}
+            >
+              <MessageSquare className="h-4 w-4" />
+              Show Remarks ({(ppmp.remarks as PPMPRemark[]).length})
+            </Button>
+          ) : null}
+        </div>
+        {showRemarks &&
+        (ppmp.remarks as PPMPRemark[] | undefined)?.length ? (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
+            <h3 className="mb-2 text-sm font-semibold text-amber-800 dark:text-amber-200">
+              PPMP Remarks
+            </h3>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              {(ppmp.remarks as PPMPRemark[]).map((r, idx) => (
+                <li key={idx} className="flex flex-col gap-0.5">
+                  <span>
                     <span className="font-medium text-foreground">
-                      {formatAuditAction(entry.action)}
+                      {r.role === "unit_head"
+                        ? "Unit Head"
+                        : r.role === "budget_officer"
+                          ? "Budget Officer"
+                          : r.role === "bac"
+                            ? "BAC"
+                            : r.role === "hope"
+                              ? "HOPE"
+                              : (r.role ?? "Reviewer")}
+                      :
+                    </span>{" "}
+                    {r.text}
+                  </span>
+                  {r.created_at && (
+                    <span className="text-xs opacity-70">
+                      {formatDate(r.created_at)}
                     </span>
-                    <span className="text-muted-foreground">·</span>
-                    <span className="text-muted-foreground">
-                      {entry.from_status &&
-                      entry.to_status &&
-                      entry.from_status !== entry.to_status
-                        ? `${entry.from_status} → ${entry.to_status}`
-                        : (entry.to_status ?? entry.action)}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                    <span>by {entry.user?.name ?? "System"}</span>
-                    <span>{formatDate(entry.created_at)}</span>
-                  </div>
-                  {entry.remarks && (
-                    <p className="mt-1 text-xs text-muted-foreground italic">
-                      {entry.remarks}
-                    </p>
                   )}
                 </li>
               ))}
             </ul>
-          )}
-        </div>
+          </div>
+        ) : null}
       </div>
 
       {createPRRow && systemUserId != null && (
@@ -1278,6 +1256,59 @@ export default function PPMPDetailPage() {
         onSuccess={editingRow ? handleEditRowSuccess : handleAddRowSuccess}
         editData={editingRow}
       />
+
+      <Dialog
+        open={auditLogModalOpen}
+        onOpenChange={setAuditLogModalOpen}
+      >
+        <DialogContent className="max-h-[85vh] overflow-hidden flex flex-col sm:max-w-[540px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-4 w-4 text-muted-foreground" />
+              Audit Trail
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto pr-2 -mr-2">
+            {auditLog.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No actions recorded yet.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {auditLog.map((entry) => (
+                  <li
+                    key={entry.id}
+                    className="flex flex-col gap-0.5 rounded-md border-l-2 border-muted-foreground/30 bg-muted/30 px-3 py-2 text-sm"
+                  >
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <span className="font-medium text-foreground">
+                        {formatAuditAction(entry.action)}
+                      </span>
+                      <span className="text-muted-foreground">·</span>
+                      <span className="text-muted-foreground">
+                        {entry.from_status &&
+                        entry.to_status &&
+                        entry.from_status !== entry.to_status
+                          ? `${entry.from_status} → ${entry.to_status}`
+                          : (entry.to_status ?? entry.action)}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                      <span>by {entry.user?.name ?? "System"}</span>
+                      <span>{formatDate(entry.created_at)}</span>
+                    </div>
+                    {entry.remarks && (
+                      <p className="mt-1 text-xs text-muted-foreground italic">
+                        {entry.remarks}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmationModal
         isOpen={submitModalOpen}

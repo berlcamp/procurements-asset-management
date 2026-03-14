@@ -85,7 +85,18 @@ export const schoolUserTypes = [
 
 /** User types that require an office (office_id set, school_id null) */
 export const divisionUserTypes = [
+  "super admin",
+  "admin",
+  "budget officer",
+  "accounting officer",
+  "procurement officer",
+  "bac chairperson",
+  "bac vice chairperson",
+  "bac secretariat",
+  "bac member",
+  "schools division superintendent",
   "supply officer - division",
+  "section chief",
   "division staff",
 ] as const;
 

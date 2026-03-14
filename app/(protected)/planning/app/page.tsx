@@ -27,13 +27,11 @@ import type {
   PPMPRowRemarkRow,
 } from "@/types/database";
 import {
-  Building2,
   Check,
   Clock,
   FileText,
   MoreVertical,
   Pencil,
-  School,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -117,16 +115,8 @@ function formatBudgetBlock(row: PPMPRow): string {
   return parts.length ? parts.join(" · ") : "-";
 }
 
-function getEndUserLabel(row: PPMPRowWithPpmp): string {
-  const ppmp = row.ppmp;
-  if (!ppmp) return "-";
-  if (ppmp.end_user_type === "school" && ppmp.school?.name) {
-    return ppmp.school.name;
-  }
-  if (ppmp.end_user_type === "office" && ppmp.office?.name) {
-    return ppmp.office.name;
-  }
-  return "-";
+function getCreatorName(row: PPMPRowWithPpmp): string {
+  return row.ppmp?.creator?.name ?? "-";
 }
 
 export default function APPPage() {
@@ -211,7 +201,7 @@ export default function APPPage() {
     let query = supabase
       .from("ppmp_rows")
       .select(
-        "*, ppmp:ppmp_id(fiscal_year, status, end_user_type, school_id, office_id, school:schools(id, name), office:offices(id, name)), ppmp_row_remarks(id, text, role, created_at)",
+        "*, ppmp:ppmp_id(fiscal_year, status, end_user_type, school_id, office_id, created_by, school:schools(id, name), office:offices(id, name), creator:users!created_by(id, name)), ppmp_row_remarks(id, text, role, created_at)",
         { count: "exact" },
       )
       .in("ppmp_id", ppmpIds);
@@ -442,7 +432,7 @@ export default function APPPage() {
               <table className="app__table">
                 <thead className="app__table_thead">
                   <tr>
-                    <th className="app__table_th">End User</th>
+                    <th className="app__table_th">Created By</th>
                     <th className="app__table_th">Project</th>
                     <th className="app__table_th">Lots / Items</th>
                     <th className="app__table_th">Procurement</th>
@@ -458,29 +448,9 @@ export default function APPPage() {
                   {rows.map((row) => (
                     <tr key={row.id} className="app__table_tr">
                       <td className="app__table_td">
-                        <div className="space-y-1">
-                          <span className="block font-medium text-sm">
-                            {getEndUserLabel(row)}
-                          </span>
-                          {row.ppmp?.end_user_type && (
-                            <span
-                              className={`inline-flex w-fit items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${
-                                row.ppmp.end_user_type === "school"
-                                  ? "bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:ring-blue-800"
-                                  : "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:ring-amber-800"
-                              }`}
-                            >
-                              {row.ppmp.end_user_type === "school" ? (
-                                <School className="h-3.5 w-3.5" />
-                              ) : (
-                                <Building2 className="h-3.5 w-3.5" />
-                              )}
-                              {row.ppmp.end_user_type === "school"
-                                ? "School"
-                                : "Office"}
-                            </span>
-                          )}
-                        </div>
+                        <span className="block font-medium text-sm">
+                          {getCreatorName(row)}
+                        </span>
                       </td>
                       <td className="app__table_td">
                         <div className="space-y-1 text-sm">
