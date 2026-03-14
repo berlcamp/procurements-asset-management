@@ -36,12 +36,12 @@ import type {
   PPMPBacApproval,
   PPMPRemark,
   PPMPRow,
+  PPMPRowAttachment,
   PPMPRowLot,
   PPMPRowLotItem,
   PPMPRowRemarkRow,
 } from "@/types/database";
 import {
-  ArrowLeft,
   ArrowLeftToLine,
   Check,
   ClipboardList,
@@ -54,12 +54,11 @@ import {
   Send,
   Trash2,
 } from "lucide-react";
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { CreatePRModal, getItemKey } from "../CreatePRModal";
 import { AddRowWizardModal } from "../AddRowWizardModal";
+import { CreatePRModal, getItemKey } from "../CreatePRModal";
 
 type PPMPRowWithRemarks = PPMPRow & { ppmp_row_remarks?: PPMPRowRemarkRow[] };
 
@@ -79,19 +78,15 @@ function LotsItemsCell({
   if (!lots || lots.length === 0)
     return <span className="text-muted-foreground">-</span>;
   return (
-    <span className="block text-xs leading-relaxed space-y-1">
+    <div className="text-xs leading-relaxed space-y-1">
       {lots.map((lot, lotIdx) => {
         const lotName = lot.name?.trim() || `Lot ${lotIdx + 1}`;
         const items = lot.items ?? [];
         if (items.length === 0)
-          return (
-            <span key={lotIdx} className="block">
-              {lotName}: (no items)
-            </span>
-          );
+          return <div key={lotIdx}>{lotName}: (no items)</div>;
         return (
-          <span key={lotIdx} className="block">
-            {lotName}:{" "}
+          <div key={lotIdx} className="space-y-0.5">
+            <div className="font-medium">{lotName}:</div>
             {(items as PPMPRowLotItem[]).map((item, itemIdx) => {
               const key = getItemKey(lotIdx, itemIdx);
               const inPR = itemsInPRs.has(key);
@@ -106,8 +101,7 @@ function LotsItemsCell({
                   : "-";
               const text = `${desc} (${qty}${unit ? ` ${unit}` : ""}) — PhP ${cost}`;
               return (
-                <span key={itemIdx}>
-                  {itemIdx > 0 && "; "}
+                <div key={itemIdx} className="pl-2">
                   {inPR ? (
                     <span className="rounded bg-green-100 px-1 dark:bg-green-900/30 text-green-800 dark:text-green-200">
                       {text}
@@ -115,13 +109,13 @@ function LotsItemsCell({
                   ) : (
                     text
                   )}
-                </span>
+                </div>
               );
             })}
-          </span>
+          </div>
         );
       })}
-    </span>
+    </div>
   );
 }
 
@@ -149,7 +143,7 @@ function formatProcurementBlock(row: PPMPRow): string {
   }
   if (row.delivery_period)
     parts.push(`Delivery: ${formatDate(row.delivery_period)}`);
-  return parts.length ? parts.join(" · ") : "-";
+  return parts.length ? parts.join("\n") : "-";
 }
 
 function formatBudgetBlock(row: PPMPRow): string {
@@ -160,7 +154,6 @@ function formatBudgetBlock(row: PPMPRow): string {
       `PhP ${row.estimated_budget.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`,
     );
   }
-  if (row.attachments?.length) parts.push(`${row.attachments.length} file(s)`);
   return parts.length ? parts.join(" · ") : "-";
 }
 
@@ -216,10 +209,7 @@ export default function PPMPDetailPage() {
   const [auditLogModalOpen, setAuditLogModalOpen] = useState(false);
   const [showRemarks, setShowRemarks] = useState(false);
   const [returnAction, setReturnAction] = useState<
-    | "returned"
-    | "returned_to_unit_head"
-    | "returned_to_budget"
-    | null
+    "returned" | "returned_to_unit_head" | "returned_to_budget" | null
   >(null);
   const [returnRemarks, setReturnRemarks] = useState("");
   const [bacMembers, setBacMembers] = useState<
@@ -230,7 +220,7 @@ export default function PPMPDetailPage() {
   const [auditLog, setAuditLog] = useState<PPMPAuditLog[]>([]);
   const [appApproval, setAppApproval] = useState<App | null>(null);
   const [prItemsByRow, setPrItemsByRow] = useState<Map<number, Set<string>>>(
-    new Map()
+    new Map(),
   );
   const [createPRRow, setCreatePRRow] = useState<PPMPRow | null>(null);
 
@@ -336,7 +326,7 @@ export default function PPMPDetailPage() {
     }
 
     // Fetch purchase_request_items for this PPMP's rows to highlight items in PRs
-    const rowIds = (rowsData as { id: number }[] ?? []).map((r) => r.id);
+    const rowIds = ((rowsData as { id: number }[]) ?? []).map((r) => r.id);
     if (rowIds.length > 0) {
       const { data: priData } = await supabase
         .from("purchase_request_items")
@@ -783,17 +773,6 @@ export default function PPMPDetailPage() {
       <div className="app__title p-4">
         <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1 space-y-3">
-            <Link
-              href={
-                isUnitHead(ppmp, systemUserId)
-                  ? "/planning/ppmp"
-                  : "/planning/ppmp-submissions"
-              }
-              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Back to PPMP
-            </Link>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
               <h1 className="app__title_text flex items-center gap-2">
                 <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
@@ -1060,9 +1039,7 @@ export default function PPMPDetailPage() {
                     <th className="app__table_th">Procurement</th>
                     <th className="app__table_th">Budget & Funding</th>
                     <th className="app__table_th">Remarks</th>
-                    {canCreatePR && (
-                      <th className="app__table_th_right">PR</th>
-                    )}
+                    {canCreatePR && <th className="app__table_th_right">PR</th>}
                     {(ppmp.status === "draft" || canBacSecretariatEditRows) && (
                       <th className="app__table_th_right">Actions</th>
                     )}
@@ -1091,13 +1068,32 @@ export default function PPMPDetailPage() {
                         />
                       </td>
                       <td className="app__table_td">
-                        <span className="block text-xs leading-relaxed">
+                        <span className="block text-xs leading-relaxed whitespace-pre-line">
                           {formatProcurementBlock(row)}
                         </span>
                       </td>
                       <td className="app__table_td">
                         <span className="block text-xs leading-relaxed">
                           {formatBudgetBlock(row)}
+                          <br />
+                          {(row.attachments as PPMPRowAttachment[] | undefined)
+                            ?.filter((a) => a.url)
+                            ?.map((a, i) => (
+                              <span key={i}>
+                                {formatBudgetBlock(row) !== "-" || i > 0
+                                  ? " · "
+                                  : null}
+                                <a
+                                  href={a.url}
+                                  download={a.name}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary hover:underline"
+                                >
+                                  {`File${i + 1}`}
+                                </a>
+                              </span>
+                            ))}
                         </span>
                       </td>
                       <td className="app__table_td">
@@ -1199,8 +1195,7 @@ export default function PPMPDetailPage() {
             </Button>
           ) : null}
         </div>
-        {showRemarks &&
-        (ppmp.remarks as PPMPRemark[] | undefined)?.length ? (
+        {showRemarks && (ppmp.remarks as PPMPRemark[] | undefined)?.length ? (
           <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
             <h3 className="mb-2 text-sm font-semibold text-amber-800 dark:text-amber-200">
               PPMP Remarks
@@ -1257,10 +1252,7 @@ export default function PPMPDetailPage() {
         editData={editingRow}
       />
 
-      <Dialog
-        open={auditLogModalOpen}
-        onOpenChange={setAuditLogModalOpen}
-      >
+      <Dialog open={auditLogModalOpen} onOpenChange={setAuditLogModalOpen}>
         <DialogContent className="max-h-[85vh] overflow-hidden flex flex-col sm:max-w-[540px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">

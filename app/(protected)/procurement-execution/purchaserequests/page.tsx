@@ -17,14 +17,21 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { Button } from "@/components/ui/button";
-import { formatPRStatusLabel, getPRStatusBadgeClass } from "@/lib/constants";
+import {
+  canApproveHope,
+  canCertifyFunds,
+  canMarkForProcurement,
+  CURRENT_FISCAL_YEAR,
+  formatPRStatusLabel,
+  getPRStatusBadgeClass,
+} from "@/lib/constants";
 import { useAppSelector } from "@/lib/redux/hook";
 import { supabase } from "@/lib/supabase/client";
 import type {
   PurchaseRequest,
   PurchaseRequestItem,
 } from "@/types/database";
-import { ClipboardList, ExternalLink, List, MoreVertical, Send } from "lucide-react";
+import { Check, ClipboardList, ExternalLink, FileCheck, List, MoreVertical } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
@@ -130,7 +137,7 @@ function PRItemsFooter({ items }: { items: PurchaseRequestItem[] }) {
   );
 }
 
-export default function PurchaseRequestsPage() {
+export default function ProcurementExecutionPurchaseRequestsPage() {
   const user = useAppSelector((state) => state.user.user);
   const systemUserId = user?.system_user_id as number | undefined;
   const [prs, setPrs] = useState<PRWithContext[]>([]);
@@ -141,32 +148,32 @@ export default function PurchaseRequestsPage() {
   >(null);
   const [prItems, setPrItems] = useState<PurchaseRequestItem[]>([]);
   const [prItemsLoading, setPrItemsLoading] = useState(false);
-  const [submitModalOpen, setSubmitModalOpen] = useState(false);
-  const [prToSubmit, setPrToSubmit] = useState<PRWithContext | null>(null);
+  const [certifyModalOpen, setCertifyModalOpen] = useState(false);
+  const [approveHopeModalOpen, setApproveHopeModalOpen] = useState(false);
+  const [forProcurementModalOpen, setForProcurementModalOpen] = useState(false);
+  const [prForAction, setPrForAction] = useState<PRWithContext | null>(null);
 
   const fetchData = useCallback(async () => {
-    if (systemUserId == null) {
-      setLoading(false);
-      setPrs([]);
-      return;
-    }
     const { data, error } = await supabase
       .from("purchase_requests")
       .select(
         "*, creator:users!created_by(id, name), ppmp_row:ppmp_rows!ppmp_row_id(id, general_description, ppmp_id, ppmp:ppmp!ppmp_id(fiscal_year, school_id, office_id, school:schools!school_id(id, name), office:offices!office_id(id, name)))"
       )
-      .eq("created_by", systemUserId)
-      .eq("status", "draft")
+      .in("status", ["submitted", "funds_certified", "hope_approved"])
       .order("created_at", { ascending: false });
 
     if (error) {
       console.error(error);
       setPrs([]);
     } else {
-      setPrs((data ?? []) as PRWithContext[]);
+      const allPrs = (data ?? []) as PRWithContext[];
+      const filtered = allPrs.filter(
+        (pr) => pr.ppmp_row?.ppmp?.fiscal_year === CURRENT_FISCAL_YEAR
+      );
+      setPrs(filtered);
     }
     setLoading(false);
-  }, [systemUserId]);
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -198,42 +205,68 @@ export default function PurchaseRequestsPage() {
     [fetchPrItems]
   );
 
-  const handleSubmitPR = useCallback(async () => {
-    if (!prToSubmit) return;
+  const handleCertifyFunds = useCallback(async () => {
+    if (!prForAction || systemUserId == null) return;
     const { error } = await supabase
       .from("purchase_requests")
-      .update({ status: "submitted", updated_at: new Date().toISOString() })
-      .eq("id", prToSubmit.id);
+      .update({
+        status: "funds_certified",
+        funds_certified_by: systemUserId,
+        funds_certified_date: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", prForAction.id);
     if (error) {
       toast.error(error.message);
       return;
     }
-    setPrToSubmit(null);
-    setSubmitModalOpen(false);
-    toast.success("Purchase Request submitted");
+    setCertifyModalOpen(false);
+    setPrForAction(null);
+    toast.success("Funds certified");
     void fetchData();
-  }, [prToSubmit, fetchData]);
+  }, [prForAction, systemUserId, fetchData]);
 
-  if (systemUserId == null) {
-    return (
-      <div>
-        <div className="app__title">
-          <h1 className="app__title_text flex items-center gap-2">
-            <ClipboardList className="h-5 w-5" />
-            Purchase Requests
-          </h1>
-        </div>
-        <div className="app__content">
-          <div className="app__empty_state">
-            <p className="app__empty_state_title">Unable to load</p>
-            <p className="app__empty_state_description">
-              Please sign in to view your purchase requests.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const handleApproveHope = useCallback(async () => {
+    if (!prForAction || systemUserId == null) return;
+    const { error } = await supabase
+      .from("purchase_requests")
+      .update({
+        status: "hope_approved",
+        hope_approved_by: systemUserId,
+        hope_approved_date: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", prForAction.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setApproveHopeModalOpen(false);
+    setPrForAction(null);
+    toast.success("Approved by HoPE");
+    void fetchData();
+  }, [prForAction, systemUserId, fetchData]);
+
+  const handleForProcurement = useCallback(async () => {
+    if (!prForAction || systemUserId == null) return;
+    const { error } = await supabase
+      .from("purchase_requests")
+      .update({
+        status: "for_procurement",
+        for_procurement_by: systemUserId,
+        for_procurement_date: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", prForAction.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setForProcurementModalOpen(false);
+    setPrForAction(null);
+    toast.success("PR marked for procurement");
+    void fetchData();
+  }, [prForAction, systemUserId, fetchData]);
 
   return (
     <div>
@@ -243,9 +276,9 @@ export default function PurchaseRequestsPage() {
           Purchase Requests
         </h1>
         <div className="app__title_actions">
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/planning/ppmp">Go to PPMP</Link>
-          </Button>
+          <span className="text-sm text-muted-foreground">
+            FY {CURRENT_FISCAL_YEAR} — All users
+          </span>
         </div>
       </div>
       <div className="app__content">
@@ -258,12 +291,9 @@ export default function PurchaseRequestsPage() {
             </div>
             <p className="app__empty_state_title">No purchase requests</p>
             <p className="app__empty_state_description">
-              Create purchase requests from approved PPMP rows on the PPMP details
-              page.
+              No submitted, funds-certified, or HoPE-approved purchase requests
+              for fiscal year {CURRENT_FISCAL_YEAR}.
             </p>
-            <Button variant="green" className="mt-4" asChild>
-              <Link href="/planning/ppmp">View PPMP</Link>
-            </Button>
           </div>
         ) : (
           <div className="app__table_container">
@@ -273,7 +303,7 @@ export default function PurchaseRequestsPage() {
                   <tr>
                     <th className="app__table_th">PR #</th>
                     <th className="app__table_th">PPMP FY</th>
-                    <th className="app__table_th">Creator / Office</th>
+                    <th className="app__table_th">Creator / End User</th>
                     <th className="app__table_th">Project</th>
                     <th className="app__table_th">Status</th>
                     <th className="app__table_th">Created</th>
@@ -329,17 +359,43 @@ export default function PurchaseRequestsPage() {
                               <span className="sr-only">Open menu</span>
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44">
-                            <DropdownMenuItem
-                              onClick={() => {
-                                setPrToSubmit(pr);
-                                setSubmitModalOpen(true);
-                              }}
-                              className="cursor-pointer"
-                            >
-                              <Send className="mr-2 h-4 w-4" />
-                              Submit
-                            </DropdownMenuItem>
+                          <DropdownMenuContent align="end" className="w-52">
+                            {canCertifyFunds(user?.type, pr.status) && (
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setPrForAction(pr);
+                                  setCertifyModalOpen(true);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                <FileCheck className="mr-2 h-4 w-4" />
+                                Certify Fund Available
+                              </DropdownMenuItem>
+                            )}
+                            {canApproveHope(user?.type, pr.status) && (
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setPrForAction(pr);
+                                  setApproveHopeModalOpen(true);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                <Check className="mr-2 h-4 w-4" />
+                                Approve (HoPE)
+                              </DropdownMenuItem>
+                            )}
+                            {canMarkForProcurement(user?.type, pr.status) && (
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setPrForAction(pr);
+                                  setForProcurementModalOpen(true);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                <FileCheck className="mr-2 h-4 w-4" />
+                                For Procurement
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem asChild>
                               <Link
                                 href={`/planning/ppmp/${pr.ppmp_row?.ppmp_id ?? ""}`}
@@ -484,17 +540,44 @@ export default function PurchaseRequestsPage() {
       </Dialog>
 
       <ConfirmationModal
-        isOpen={submitModalOpen}
+        isOpen={certifyModalOpen}
         onClose={() => {
-          setSubmitModalOpen(false);
-          setPrToSubmit(null);
+          setCertifyModalOpen(false);
+          setPrForAction(null);
         }}
-        onConfirm={handleSubmitPR}
+        onConfirm={handleCertifyFunds}
         message={
           <p className="text-sm text-muted-foreground">
-            Submit this Purchase Request? Status will change to Submitted and it
-            will appear on the Procurement Execution page for the Budget Officer
-            to certify funds.
+            Certify that funds are available for this Purchase Request? This will
+            record your certification and change the status to Funds Certified.
+          </p>
+        }
+      />
+      <ConfirmationModal
+        isOpen={approveHopeModalOpen}
+        onClose={() => {
+          setApproveHopeModalOpen(false);
+          setPrForAction(null);
+        }}
+        onConfirm={handleApproveHope}
+        message={
+          <p className="text-sm text-muted-foreground">
+            Approve this Purchase Request as HoPE (Schools Division
+            Superintendent)? This will change the status to HoPE Approved.
+          </p>
+        }
+      />
+      <ConfirmationModal
+        isOpen={forProcurementModalOpen}
+        onClose={() => {
+          setForProcurementModalOpen(false);
+          setPrForAction(null);
+        }}
+        onConfirm={handleForProcurement}
+        message={
+          <p className="text-sm text-muted-foreground">
+            Mark this Purchase Request for Procurement? It will move to the
+            Pre-Procurement page for the BAC to process.
           </p>
         }
       />

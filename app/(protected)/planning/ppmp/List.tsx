@@ -59,6 +59,10 @@ function getAppStatusBadgeClass(
 }
 const table = "ppmp";
 
+function getCreatorName(item: ItemType): string {
+  return item.creator?.name ?? "-";
+}
+
 function getEndUserLabel(item: ItemType): string {
   if (item.end_user_type === "school" && item.school?.name) {
     return item.school.name;
@@ -145,7 +149,7 @@ export const List = () => {
           <thead className="app__table_thead">
             <tr>
               <th className="app__table_th">Fiscal Year</th>
-              <th className="app__table_th">End User</th>
+              <th className="app__table_th">Creator / Office</th>
               <th className="app__table_th">Status</th>
               <th className="app__table_th">APP Status</th>
               <th className="app__table_th">Remarks</th>
@@ -163,7 +167,7 @@ export const List = () => {
                 <td className="app__table_td">
                   <div className="flex flex-col gap-1.5">
                     <div className="app__table_cell_title">
-                      {getEndUserLabel(item)}
+                      {getCreatorName(item)}
                     </div>
                     <span
                       className={`inline-flex w-fit items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${
@@ -177,7 +181,7 @@ export const List = () => {
                       ) : (
                         <Building2 className="h-3.5 w-3.5" />
                       )}
-                      {item.end_user_type === "school" ? "School" : "Office"}
+                      {getEndUserLabel(item)}
                     </span>
                   </div>
                 </td>

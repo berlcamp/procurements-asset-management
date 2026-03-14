@@ -74,6 +74,44 @@ export function isHope(type: string | undefined): boolean {
 /** User types that can access the staff management page */
 export const staffAccessTypes = ["admin", "super admin"] as const;
 
+/** User types that can access the Budget Planning menu (LASA, Budget Allocations) */
+export const budgetPlanningAccessTypes = [
+  "schools division superintendent",
+  "budget officer",
+] as const;
+export type BudgetPlanningAccessType =
+  (typeof budgetPlanningAccessTypes)[number];
+
+/** Returns true if the user type can access Budget Planning features */
+export function hasBudgetPlanningAccess(type: string | undefined): boolean {
+  return (
+    type != null &&
+    (budgetPlanningAccessTypes as readonly string[]).includes(type)
+  );
+}
+
+/** User types that can access the Procurement Execution menu (Purchase Requests, Pre-Procurement, RFQ, etc.) */
+export const procurementExecutionAccessTypes = [
+  "budget officer",
+  "accounting officer",
+  "procurement officer",
+  "bac chairperson",
+  "bac vice chairperson",
+  "bac secretariat",
+  "bac member",
+  "schools division superintendent",
+] as const;
+export type ProcurementExecutionAccessType =
+  (typeof procurementExecutionAccessTypes)[number];
+
+/** Returns true if the user type can access Procurement Execution features */
+export function hasProcurementExecutionAccess(type: string | undefined): boolean {
+  return (
+    type != null &&
+    (procurementExecutionAccessTypes as readonly string[]).includes(type)
+  );
+}
+
 export type StaffAccessType = (typeof staffAccessTypes)[number];
 
 /** User types that require a school (school_id set, office_id null) */
@@ -146,6 +184,79 @@ export function formatPPMPStatusLabel(status: string): string {
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(" ");
+}
+
+/** Purchase Request statuses through the procurement workflow */
+export const PR_STATUSES = [
+  "draft",
+  "submitted",
+  "funds_certified",
+  "hope_approved",
+  "for_procurement",
+  "ready_for_rfq_bidding",
+  "for_bid_evaluation",
+  "for_notice_of_award",
+  "for_purchase_order",
+  "po_released",
+] as const;
+export type PurchaseRequestStatusType = (typeof PR_STATUSES)[number];
+
+/** Formats a PR status for display (e.g. "funds_certified" → "Funds Certified") */
+export function formatPRStatusLabel(status: string): string {
+  const s = status || "draft";
+  return s
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
+/** Returns Tailwind classes for PR status badge */
+export function getPRStatusBadgeClass(status: string): string {
+  const s = status || "draft";
+  const base =
+    "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium";
+  if (s === "draft")
+    return `${base} bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300`;
+  if (
+    s === "submitted" ||
+    s === "funds_certified" ||
+    s === "hope_approved" ||
+    s === "for_procurement"
+  )
+    return `${base} bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200`;
+  if (
+    s === "ready_for_rfq_bidding" ||
+    s === "for_bid_evaluation" ||
+    s === "for_notice_of_award" ||
+    s === "for_purchase_order" ||
+    s === "po_released"
+  )
+    return `${base} bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200`;
+  return `${base} bg-muted text-muted-foreground`;
+}
+
+/** Returns true if user can certify funds (Budget Officer) */
+export function canCertifyFunds(
+  userType: string | undefined,
+  status: string,
+): boolean {
+  return isBudgetOfficer(userType) && status === "submitted";
+}
+
+/** Returns true if user can approve as HoPE */
+export function canApproveHope(
+  userType: string | undefined,
+  status: string,
+): boolean {
+  return isHope(userType) && status === "funds_certified";
+}
+
+/** Returns true if user can mark PR for procurement (BAC Secretariat) */
+export function canMarkForProcurement(
+  userType: string | undefined,
+  status: string,
+): boolean {
+  return isBacSecretariat(userType) && status === "hope_approved";
 }
 
 /** PPMP project types */

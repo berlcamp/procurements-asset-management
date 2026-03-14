@@ -26,12 +26,15 @@ interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   editData?: ItemType | null;
+  onCreated?: () => void;
 }
 
-export const AddModal = ({ isOpen, onClose, editData }: ModalProps) => {
+export const AddModal = ({ isOpen, onClose, editData, onCreated }: ModalProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [school, setSchool] = useState<School | null>(null);
   const [office, setOffice] = useState<Office | null>(null);
+  const [hasExistingPPMPThisYear, setHasExistingPPMPThisYear] = useState(false);
+  const [checkingExisting, setCheckingExisting] = useState(false);
 
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.user.user);
@@ -50,6 +53,24 @@ export const AddModal = ({ isOpen, onClose, editData }: ModalProps) => {
     endUserType === "office" && user?.office_id != null
       ? Number(user.office_id)
       : null;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const checkUserPPMPForYear = async () => {
+      if (user?.system_user_id == null) return;
+      setCheckingExisting(true);
+      const { data } = await supabase
+        .from("ppmp")
+        .select("id")
+        .eq("created_by", user.system_user_id)
+        .eq("fiscal_year", CURRENT_FISCAL_YEAR)
+        .limit(1)
+        .maybeSingle();
+      setHasExistingPPMPThisYear(!!data);
+      setCheckingExisting(false);
+    };
+    void checkUserPPMPForYear();
+  }, [isOpen, user?.system_user_id]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -85,6 +106,8 @@ export const AddModal = ({ isOpen, onClose, editData }: ModalProps) => {
 
   const canCreate =
     !editData &&
+    !hasExistingPPMPThisYear &&
+    !checkingExisting &&
     endUserType != null &&
     ((endUserType === "school" && schoolId != null) ||
       (endUserType === "office" && officeId != null)) &&
@@ -111,13 +134,14 @@ export const AddModal = ({ isOpen, onClose, editData }: ModalProps) => {
 
       if (error) {
         if (error.code === "23505") {
-          toast.error("A PPMP already exists for this fiscal year and end user.");
+          toast.error("You can only create one PPMP per fiscal year.");
           return;
         }
         throw new Error(error.message);
       }
 
       dispatch(addItem(inserted));
+      onCreated?.();
       onClose();
       toast.success("PPMP created successfully!");
     } catch (err) {
@@ -206,7 +230,12 @@ export const AddModal = ({ isOpen, onClose, editData }: ModalProps) => {
           </div>
         </div>
 
-        {!canCreate && user && (
+        {hasExistingPPMPThisYear && (
+          <p className="text-sm text-amber-600 dark:text-amber-400">
+            You already have a PPMP for fiscal year {CURRENT_FISCAL_YEAR}. Each user can only create one PPMP per fiscal year.
+          </p>
+        )}
+        {!canCreate && user && !hasExistingPPMPThisYear && (
           <p className="text-sm text-amber-600 dark:text-amber-400">
             Your account must be linked to a school or office to create a PPMP.
           </p>

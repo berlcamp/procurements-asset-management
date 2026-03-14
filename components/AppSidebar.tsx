@@ -36,7 +36,12 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
+import {
+  hasBudgetPlanningAccess,
+  hasProcurementExecutionAccess,
+} from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { useAppSelector } from "@/lib/redux/hook";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import NProgress from "nprogress";
@@ -44,6 +49,9 @@ import { useEffect, useState } from "react";
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const user = useAppSelector((state) => state.user.user);
+  const showBudgetPlanning = hasBudgetPlanningAccess(user?.type);
+  const showProcurementExecution = hasProcurementExecutionAccess(user?.type);
   const [loadingPath, setLoadingPath] = useState<string | null>(null);
 
   const isOnOrganizationPage =
@@ -78,6 +86,11 @@ export function AppSidebar() {
       url: "/planning/ppmp-submissions",
       icon: Inbox,
     },
+    {
+      title: "Purchase Requests",
+      url: "/planning/purchaserequests",
+      icon: ClipboardList,
+    },
     { title: "APP", url: "/planning/app", icon: FileText },
   ];
 
@@ -92,8 +105,8 @@ export function AppSidebar() {
 
   const procurementExecutionItems = [
     {
-      title: "Purchase Requests (PR)",
-      url: "/planning/purchaserequests",
+      title: "Purchase Requests",
+      url: "/procurement-execution/purchaserequests",
       icon: ClipboardList,
     },
     {
@@ -242,41 +255,47 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Procurement Planning */}
-        <SidebarGroup className="px-2 py-4">
-          <SidebarGroupLabel className="px-3 mb-2 text-xs font-semibold text-muted-foreground/70 uppercase tracking-wider">
-            Procurement Planning
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu className="space-y-1">
-              {renderMenu(planningItems)}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {/* Procurement Planning - visible only to budget/accounting/procurement/BAC/SDS */}
+        {showProcurementExecution && (
+          <SidebarGroup className="px-2 py-4">
+            <SidebarGroupLabel className="px-3 mb-2 text-xs font-semibold text-muted-foreground/70 uppercase tracking-wider">
+              Procurement Planning
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="space-y-1">
+                {renderMenu(planningItems)}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
-        {/* Budget Planning */}
-        <SidebarGroup className="px-2 py-4">
-          <SidebarGroupLabel className="px-3 mb-2 text-xs font-semibold text-muted-foreground/70 uppercase tracking-wider">
-            Budget Planning
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu className="space-y-1">
-              {renderMenu(budgetItems)}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {/* Budget Planning - visible only to SDS and budget officer */}
+        {showBudgetPlanning && (
+          <SidebarGroup className="px-2 py-4">
+            <SidebarGroupLabel className="px-3 mb-2 text-xs font-semibold text-muted-foreground/70 uppercase tracking-wider">
+              Budget Planning
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="space-y-1">
+                {renderMenu(budgetItems)}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
-        {/* Procurement Execution */}
-        <SidebarGroup className="px-2 py-4">
-          <SidebarGroupLabel className="px-3 mb-2 text-xs font-semibold text-muted-foreground/70 uppercase tracking-wider">
-            Procurement Execution
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu className="space-y-1">
-              {renderMenu(procurementExecutionItems)}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {/* Procurement Execution - visible only to budget/accounting/procurement/BAC/SDS */}
+        {showProcurementExecution && (
+          <SidebarGroup className="px-2 py-4">
+            <SidebarGroupLabel className="px-3 mb-2 text-xs font-semibold text-muted-foreground/70 uppercase tracking-wider">
+              Procurement Execution
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="space-y-1">
+                {renderMenu(procurementExecutionItems)}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {/* Delivery & Inspection */}
         <SidebarGroup className="px-2 py-4">

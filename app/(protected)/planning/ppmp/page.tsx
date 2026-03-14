@@ -2,7 +2,7 @@
 
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { Button } from "@/components/ui/button";
-import { PER_PAGE } from "@/lib/constants";
+import { CURRENT_FISCAL_YEAR, PER_PAGE } from "@/lib/constants";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hook";
 import { addList } from "@/lib/redux/listSlice";
 import { supabase } from "@/lib/supabase/client";
@@ -14,10 +14,13 @@ import { Filter, type PPMPFilter } from "./Filter";
 import { List } from "./List";
 
 export default function PPMPPage() {
+  const user = useAppSelector((state) => state.user.user);
+  const systemUserId = user?.system_user_id as number | undefined;
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
   const [modalAddOpen, setModalAddOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [hasPPMPThisYear, setHasPPMPThisYear] = useState(false);
   const [filter, setFilter] = useState<PPMPFilter>({});
 
   const dispatch = useAppDispatch();
@@ -33,13 +36,19 @@ export default function PPMPPage() {
     dispatch(addList([]));
 
     const fetchData = async () => {
+      if (systemUserId == null) {
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       let query = supabase
         .from("ppmp")
         .select(
-          "*, school:schools!school_id(id, name), office:offices!office_id(id, name), ppmp_rows(app_status)",
+          "*, school:schools!school_id(id, name), office:offices!office_id(id, name), creator:users!created_by(id, name), ppmp_rows(app_status)",
           { count: "exact" },
-        );
+        )
+        .eq("created_by", systemUserId);
 
       if (filter.fiscalYear != null) {
         query = query.eq("fiscal_year", filter.fiscalYear);
@@ -62,6 +71,16 @@ export default function PPMPPage() {
         dispatch(addList((data ?? []) as PPMP[]));
         setTotalCount(count ?? 0);
       }
+
+      const { data: existing } = await supabase
+        .from("ppmp")
+        .select("id")
+        .eq("created_by", systemUserId)
+        .eq("fiscal_year", CURRENT_FISCAL_YEAR)
+        .limit(1)
+        .maybeSingle();
+      if (isMounted) setHasPPMPThisYear(!!existing);
+
       setLoading(false);
     };
 
@@ -69,7 +88,28 @@ export default function PPMPPage() {
     return () => {
       isMounted = false;
     };
-  }, [page, filter, dispatch]);
+  }, [page, filter, systemUserId, dispatch]);
+
+  if (systemUserId == null) {
+    return (
+      <div>
+        <div className="app__title">
+          <h1 className="app__title_text flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Project Procurement Management Plan (PPMP)
+          </h1>
+        </div>
+        <div className="app__content">
+          <div className="app__empty_state">
+            <p className="app__empty_state_title">Unable to load</p>
+            <p className="app__empty_state_description">
+              Please sign in to view your PPMPs.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -84,6 +124,8 @@ export default function PPMPPage() {
             variant="green"
             onClick={() => setModalAddOpen(true)}
             size="sm"
+            disabled={hasPPMPThisYear}
+            title={hasPPMPThisYear ? "You can only create one PPMP per fiscal year" : undefined}
           >
             <Plus className="mr-1.5 h-4 w-4" />
             Add PPMP
@@ -171,6 +213,7 @@ export default function PPMPPage() {
         <AddModal
           isOpen={modalAddOpen}
           onClose={() => setModalAddOpen(false)}
+          onCreated={() => setHasPPMPThisYear(true)}
         />
       </div>
     </div>

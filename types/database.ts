@@ -157,15 +157,45 @@ export interface App {
   updated_at: string;
 }
 
+/** Purchase Request status values through the procurement workflow */
+export type PurchaseRequestStatus =
+  | "draft"
+  | "submitted"
+  | "funds_certified"
+  | "hope_approved"
+  | "for_procurement"
+  | "ready_for_rfq_bidding"
+  | "for_bid_evaluation"
+  | "for_notice_of_award"
+  | "for_purchase_order"
+  | "po_released";
+
 /** Purchase Request - created from approved PPMP row */
 export interface PurchaseRequest {
   id: number;
   ppmp_row_id: number;
   created_by: number;
-  status: "draft" | "submitted";
+  status: PurchaseRequestStatus;
   reference_number: string | null;
   created_at: string;
   updated_at: string;
+  funds_certified_by?: number | null;
+  funds_certified_date?: string | null;
+  hope_approved_by?: number | null;
+  hope_approved_date?: string | null;
+  for_procurement_by?: number | null;
+  for_procurement_date?: string | null;
+  conference_date?: string | null;
+  rfq_no?: string | null;
+  posting_date?: string | null;
+  submission_deadline?: string | null;
+  num_bidders?: number | null;
+  lowest_bid?: number | null;
+  evaluation_status?: string | null;
+  supplier?: string | null;
+  award_amount?: number | null;
+  noa_date?: string | null;
+  delivery_date?: string | null;
 }
 
 /** Purchase Request Item - links PR to specific lot/item via indices */

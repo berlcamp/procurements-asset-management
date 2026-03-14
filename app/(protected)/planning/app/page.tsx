@@ -27,11 +27,13 @@ import type {
   PPMPRowRemarkRow,
 } from "@/types/database";
 import {
+  Building2,
   Check,
   Clock,
   FileText,
   MoreVertical,
   Pencil,
+  School,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -117,6 +119,20 @@ function formatBudgetBlock(row: PPMPRow): string {
 
 function getCreatorName(row: PPMPRowWithPpmp): string {
   return row.ppmp?.creator?.name ?? "-";
+}
+
+function getEndUserLabel(row: PPMPRowWithPpmp): string {
+  const ppmp = row.ppmp;
+  if (!ppmp) return "-";
+  if (ppmp.end_user_type === "school" && ppmp.school?.name) {
+    return ppmp.school.name;
+  }
+  if (ppmp.end_user_type === "school") return "School";
+  if (ppmp.end_user_type === "office" && ppmp.office?.name) {
+    return ppmp.office.name;
+  }
+  if (ppmp.end_user_type === "office") return "Office";
+  return "-";
 }
 
 export default function APPPage() {
@@ -432,7 +448,7 @@ export default function APPPage() {
               <table className="app__table">
                 <thead className="app__table_thead">
                   <tr>
-                    <th className="app__table_th">Created By</th>
+                    <th className="app__table_th">Creator / Office</th>
                     <th className="app__table_th">Project</th>
                     <th className="app__table_th">Lots / Items</th>
                     <th className="app__table_th">Procurement</th>
@@ -448,9 +464,25 @@ export default function APPPage() {
                   {rows.map((row) => (
                     <tr key={row.id} className="app__table_tr">
                       <td className="app__table_td">
-                        <span className="block font-medium text-sm">
-                          {getCreatorName(row)}
-                        </span>
+                        <div className="flex flex-col gap-1.5">
+                          <div className="app__table_cell_title">
+                            {getCreatorName(row)}
+                          </div>
+                          <span
+                            className={`inline-flex w-fit items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${
+                              row.ppmp?.end_user_type === "school"
+                                ? "bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:ring-blue-800"
+                                : "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:ring-amber-800"
+                            }`}
+                          >
+                            {row.ppmp?.end_user_type === "school" ? (
+                              <School className="h-3.5 w-3.5" />
+                            ) : (
+                              <Building2 className="h-3.5 w-3.5" />
+                            )}
+                            {getEndUserLabel(row)}
+                          </span>
+                        </div>
                       </td>
                       <td className="app__table_td">
                         <div className="space-y-1 text-sm">
