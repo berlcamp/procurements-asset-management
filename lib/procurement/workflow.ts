@@ -1,3 +1,4 @@
+import { BID_EVALUATION_STEP_KEYS } from "@/lib/constants";
 import { supabase } from "@/lib/supabase/client";
 import type { ProcurementModeWorkflowRow } from "./types";
 
@@ -213,6 +214,34 @@ export async function advanceToNoticeOfAward(
     await advanceToStep(
       purchaseRequestId,
       noaStep.step_key,
+      completedByUserId,
+    );
+  }
+}
+
+/**
+ * Advance to the Bid Evaluation step. Jumps to the first pending step in
+ * BID_EVALUATION_STEP_KEYS for this PR, skipping any intermediate steps
+ * (e.g. proposal_submission for negotiated, which would otherwise hide the PR).
+ */
+export async function advanceToBidEvaluation(
+  purchaseRequestId: number,
+  completedByUserId?: number,
+): Promise<void> {
+  const { data: bidEvalStep } = await supabase
+    .from("procurement_steps")
+    .select("step_key")
+    .eq("purchase_request_id", purchaseRequestId)
+    .in("step_key", [...BID_EVALUATION_STEP_KEYS])
+    .eq("status", "pending")
+    .order("sequence", { ascending: true })
+    .limit(1)
+    .single();
+
+  if (bidEvalStep?.step_key) {
+    await advanceToStep(
+      purchaseRequestId,
+      bidEvalStep.step_key,
       completedByUserId,
     );
   }

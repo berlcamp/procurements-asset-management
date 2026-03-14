@@ -313,6 +313,8 @@ export const BID_EVALUATION_STEP_KEYS = [
   "abstract_of_quotations",
   "technical_evaluation",
   "bac_recommendation",
+  "memorandum_of_agreement",
+  "proposal_submission",
 ] as const;
 
 /** Step keys for Notice of Award page */

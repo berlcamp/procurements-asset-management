@@ -1,6 +1,8 @@
 "use client";
 
 import { ConfirmationModal } from "@/components/ConfirmationModal";
+import { TableSkeleton } from "@/components/TableSkeleton";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -15,21 +17,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { TableSkeleton } from "@/components/TableSkeleton";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  CURRENT_FISCAL_YEAR,
-  RFQ_BIDDING_STEP_KEYS,
-} from "@/lib/constants";
-import { advanceStep } from "@/lib/procurement/workflow";
+import { CURRENT_FISCAL_YEAR, RFQ_BIDDING_STEP_KEYS } from "@/lib/constants";
+import { advanceToBidEvaluation } from "@/lib/procurement/workflow";
 import { supabase } from "@/lib/supabase/client";
 import type { PurchaseRequest } from "@/types/database";
 import {
   ExternalLink,
-  Gavel,
   FileText,
+  Gavel,
   MoreVertical,
   Send,
 } from "lucide-react";
@@ -89,7 +86,7 @@ export default function RfqBiddingPage() {
     const { data, error } = await supabase
       .from("purchase_requests")
       .select(
-        "*, creator:users!created_by(id, name), ppmp_row:ppmp_rows!ppmp_row_id(id, general_description, ppmp_id, ppmp:ppmp!ppmp_id(fiscal_year, school_id, office_id, school:schools!school_id(id, name), office:offices!office_id(id, name)))"
+        "*, creator:users!created_by(id, name), ppmp_row:ppmp_rows!ppmp_row_id(id, general_description, ppmp_id, ppmp:ppmp!ppmp_id(fiscal_year, school_id, office_id, school:schools!school_id(id, name), office:offices!office_id(id, name)))",
       )
       .in("current_step_key", [...RFQ_BIDDING_STEP_KEYS])
       .order("created_at", { ascending: false });
@@ -100,7 +97,7 @@ export default function RfqBiddingPage() {
     } else {
       const allPrs = (data ?? []) as PRWithContext[];
       const filtered = allPrs.filter(
-        (pr) => pr.ppmp_row?.ppmp?.fiscal_year === CURRENT_FISCAL_YEAR
+        (pr) => pr.ppmp_row?.ppmp?.fiscal_year === CURRENT_FISCAL_YEAR,
       );
       setPrs(filtered);
     }
@@ -137,14 +134,23 @@ export default function RfqBiddingPage() {
     resetRfqForm();
     toast.success("RFQ recorded");
     void fetchData();
-  }, [prForAction, rfqNo, postingDate, submissionDeadline, resetRfqForm, fetchData]);
+  }, [
+    prForAction,
+    rfqNo,
+    postingDate,
+    submissionDeadline,
+    resetRfqForm,
+    fetchData,
+  ]);
 
   const handleRecordSubmissions = useCallback(async () => {
     if (!prForAction) return;
     try {
-      await advanceStep(prForAction.id);
+      await advanceToBidEvaluation(prForAction.id);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to advance step");
+      toast.error(
+        err instanceof Error ? err.message : "Failed to advance step",
+      );
       return;
     }
     setRecordSubmissionsModalOpen(false);
@@ -207,9 +213,7 @@ export default function RfqBiddingPage() {
                           {pr.reference_number || `PR-${pr.id}`}
                         </span>
                       </td>
-                      <td className="app__table_td">
-                        {pr.rfq_no || "-"}
-                      </td>
+                      <td className="app__table_td">{pr.rfq_no || "-"}</td>
                       <td className="app__table_td text-sm text-muted-foreground">
                         {formatDate(pr.posting_date)}
                       </td>
@@ -246,12 +250,12 @@ export default function RfqBiddingPage() {
                                 setPostingDate(
                                   pr.posting_date
                                     ? pr.posting_date.slice(0, 10)
-                                    : ""
+                                    : "",
                                 );
                                 setSubmissionDeadline(
                                   pr.submission_deadline
                                     ? pr.submission_deadline.slice(0, 10)
-                                    : ""
+                                    : "",
                                 );
                                 setRfqModalOpen(true);
                               }}
@@ -268,7 +272,7 @@ export default function RfqBiddingPage() {
                               className="cursor-pointer"
                             >
                               <Send className="mr-2 h-4 w-4" />
-                              Record Submissions
+                              Move to Bid Evaluation
                             </DropdownMenuItem>
                             <DropdownMenuItem asChild>
                               <Link
@@ -360,8 +364,8 @@ export default function RfqBiddingPage() {
         onConfirm={handleRecordSubmissions}
         message={
           <p className="text-sm text-muted-foreground">
-            Record that quotations have been submitted? This will move the PR to
-            the Bid Evaluation page.
+            Record that quotations have been submitted? Move this PR to the Bid
+            Evaluation page?
           </p>
         }
       />
