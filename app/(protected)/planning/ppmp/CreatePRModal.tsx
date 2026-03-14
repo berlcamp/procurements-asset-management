@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { generateSteps } from "@/lib/procurement/workflow";
 import { supabase } from "@/lib/supabase/client";
 import type {
   PPMPRow,
@@ -127,6 +128,13 @@ export function CreatePRModal({
       if (itemsError) {
         toast.error(itemsError.message);
         return;
+      }
+
+      try {
+        await generateSteps(prId, row.procurement_mode ?? "competitive bidding");
+      } catch (genErr) {
+        console.error("Failed to generate workflow steps:", genErr);
+        toast.error("PR created but workflow setup failed. Please contact support.");
       }
 
       toast.success("Purchase Request created");

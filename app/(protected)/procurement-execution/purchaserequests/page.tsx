@@ -25,6 +25,7 @@ import {
   formatPRStatusLabel,
   getPRStatusBadgeClass,
 } from "@/lib/constants";
+import { activateFirstStep } from "@/lib/procurement/workflow";
 import { useAppSelector } from "@/lib/redux/hook";
 import { supabase } from "@/lib/supabase/client";
 import type {
@@ -41,6 +42,7 @@ type PRWithContext = PurchaseRequest & {
   ppmp_row?: {
     id: number;
     general_description: string | null;
+    procurement_mode: string | null;
     ppmp_id: number;
     ppmp?: {
       fiscal_year: number;
@@ -157,7 +159,7 @@ export default function ProcurementExecutionPurchaseRequestsPage() {
     const { data, error } = await supabase
       .from("purchase_requests")
       .select(
-        "*, creator:users!created_by(id, name), ppmp_row:ppmp_rows!ppmp_row_id(id, general_description, ppmp_id, ppmp:ppmp!ppmp_id(fiscal_year, school_id, office_id, school:schools!school_id(id, name), office:offices!office_id(id, name)))"
+        "*, creator:users!created_by(id, name), ppmp_row:ppmp_rows!ppmp_row_id(id, general_description, procurement_mode, ppmp_id, ppmp:ppmp!ppmp_id(fiscal_year, school_id, office_id, school:schools!school_id(id, name), office:offices!office_id(id, name)))"
       )
       .in("status", ["submitted", "funds_certified", "hope_approved"])
       .order("created_at", { ascending: false });
@@ -262,6 +264,7 @@ export default function ProcurementExecutionPurchaseRequestsPage() {
       toast.error(error.message);
       return;
     }
+    await activateFirstStep(prForAction.id, prForAction.ppmp_row?.procurement_mode);
     setForProcurementModalOpen(false);
     setPrForAction(null);
     toast.success("PR marked for procurement");

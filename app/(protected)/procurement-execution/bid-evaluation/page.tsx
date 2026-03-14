@@ -19,7 +19,11 @@ import { TableSkeleton } from "@/components/TableSkeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CURRENT_FISCAL_YEAR } from "@/lib/constants";
+import {
+  CURRENT_FISCAL_YEAR,
+  BID_EVALUATION_STEP_KEYS,
+} from "@/lib/constants";
+import { advanceToNoticeOfAward } from "@/lib/procurement/workflow";
 import { supabase } from "@/lib/supabase/client";
 import type { PurchaseRequest } from "@/types/database";
 import { ExternalLink, ListCheck, MoreVertical, Scale } from "lucide-react";
@@ -85,7 +89,7 @@ export default function BidEvaluationPage() {
       .select(
         "*, creator:users!created_by(id, name), ppmp_row:ppmp_rows!ppmp_row_id(id, general_description, ppmp_id, ppmp:ppmp!ppmp_id(fiscal_year, school_id, office_id, school:schools!school_id(id, name), office:offices!office_id(id, name)))"
       )
-      .eq("status", "for_bid_evaluation")
+      .in("current_step_key", [...BID_EVALUATION_STEP_KEYS])
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -137,15 +141,10 @@ export default function BidEvaluationPage() {
 
   const handleSelectWinner = useCallback(async () => {
     if (!prForAction) return;
-    const { error } = await supabase
-      .from("purchase_requests")
-      .update({
-        status: "for_notice_of_award",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", prForAction.id);
-    if (error) {
-      toast.error(error.message);
+    try {
+      await advanceToNoticeOfAward(prForAction.id);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to advance step");
       return;
     }
     setRecordResultModalOpen(false);
@@ -177,7 +176,7 @@ export default function BidEvaluationPage() {
             </div>
             <p className="app__empty_state_title">No RFQs to evaluate</p>
             <p className="app__empty_state_description">
-              No RFQs with submitted quotations for fiscal year{" "}
+              No procurements at Bid Evaluation for fiscal year{" "}
               {CURRENT_FISCAL_YEAR}. Record submissions on the RFQ / Bidding
               page first.
             </p>

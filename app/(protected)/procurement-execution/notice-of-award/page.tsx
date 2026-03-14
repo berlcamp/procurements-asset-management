@@ -19,7 +19,11 @@ import { TableSkeleton } from "@/components/TableSkeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CURRENT_FISCAL_YEAR } from "@/lib/constants";
+import {
+  CURRENT_FISCAL_YEAR,
+  NOTICE_OF_AWARD_STEP_KEYS,
+} from "@/lib/constants";
+import { advanceStep } from "@/lib/procurement/workflow";
 import { supabase } from "@/lib/supabase/client";
 import type { PurchaseRequest } from "@/types/database";
 import { Award, ExternalLink, FileText, MoreVertical, Check } from "lucide-react";
@@ -85,7 +89,7 @@ export default function NoticeOfAwardPage() {
       .select(
         "*, creator:users!created_by(id, name), ppmp_row:ppmp_rows!ppmp_row_id(id, general_description, ppmp_id, ppmp:ppmp!ppmp_id(fiscal_year, school_id, office_id, school:schools!school_id(id, name), office:offices!office_id(id, name)))"
       )
-      .eq("status", "for_notice_of_award")
+      .in("current_step_key", [...NOTICE_OF_AWARD_STEP_KEYS])
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -136,15 +140,10 @@ export default function NoticeOfAwardPage() {
 
   const handleConfirmAcceptance = useCallback(async () => {
     if (!prForAction) return;
-    const { error } = await supabase
-      .from("purchase_requests")
-      .update({
-        status: "for_purchase_order",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", prForAction.id);
-    if (error) {
-      toast.error(error.message);
+    try {
+      await advanceStep(prForAction.id);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to advance step");
       return;
     }
     setAcceptanceModalOpen(false);
@@ -176,7 +175,7 @@ export default function NoticeOfAwardPage() {
             </div>
             <p className="app__empty_state_title">No awards to process</p>
             <p className="app__empty_state_description">
-              No evaluated procurements awaiting award for fiscal year{" "}
+              No procurements at Notice of Award for fiscal year{" "}
               {CURRENT_FISCAL_YEAR}. Select winning suppliers on the Bid
               Evaluation page first.
             </p>

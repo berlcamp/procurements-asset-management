@@ -19,7 +19,11 @@ import { TableSkeleton } from "@/components/TableSkeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CURRENT_FISCAL_YEAR } from "@/lib/constants";
+import {
+  CURRENT_FISCAL_YEAR,
+  PURCHASE_ORDER_STEP_KEY,
+} from "@/lib/constants";
+import { advanceStep } from "@/lib/procurement/workflow";
 import { supabase } from "@/lib/supabase/client";
 import type { PurchaseRequest } from "@/types/database";
 import {
@@ -89,7 +93,7 @@ export default function PurchaseOrdersPage() {
       .select(
         "*, creator:users!created_by(id, name), ppmp_row:ppmp_rows!ppmp_row_id(id, general_description, ppmp_id, ppmp:ppmp!ppmp_id(fiscal_year, school_id, office_id, school:schools!school_id(id, name), office:offices!office_id(id, name)))"
       )
-      .eq("status", "for_purchase_order")
+      .eq("current_step_key", PURCHASE_ORDER_STEP_KEY)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -131,15 +135,10 @@ export default function PurchaseOrdersPage() {
 
   const handleReleasePO = useCallback(async () => {
     if (!prForAction) return;
-    const { error } = await supabase
-      .from("purchase_requests")
-      .update({
-        status: "po_released",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", prForAction.id);
-    if (error) {
-      toast.error(error.message);
+    try {
+      await advanceStep(prForAction.id);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to advance step");
       return;
     }
     setReleaseModalOpen(false);
@@ -171,7 +170,7 @@ export default function PurchaseOrdersPage() {
             </div>
             <p className="app__empty_state_title">No purchase orders</p>
             <p className="app__empty_state_description">
-              No awarded procurements awaiting PO for fiscal year{" "}
+              No procurements at Purchase Order for fiscal year{" "}
               {CURRENT_FISCAL_YEAR}. Confirm supplier acceptance on the Notice
               of Award page first.
             </p>

@@ -19,7 +19,11 @@ import { TableSkeleton } from "@/components/TableSkeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CURRENT_FISCAL_YEAR } from "@/lib/constants";
+import {
+  CURRENT_FISCAL_YEAR,
+  PRE_PROCUREMENT_STEP_KEYS,
+} from "@/lib/constants";
+import { advanceStep } from "@/lib/procurement/workflow";
 import { supabase } from "@/lib/supabase/client";
 import type { PurchaseRequest } from "@/types/database";
 import { Calendar, ExternalLink, FileSearch, List, MoreVertical } from "lucide-react";
@@ -85,7 +89,7 @@ export default function PreProcurementPage() {
       .select(
         "*, creator:users!created_by(id, name), ppmp_row:ppmp_rows!ppmp_row_id(id, general_description, procurement_mode, estimated_budget, ppmp_id, ppmp:ppmp!ppmp_id(fiscal_year, school_id, office_id, school:schools!school_id(id, name), office:offices!office_id(id, name)))"
       )
-      .eq("status", "for_procurement")
+      .in("current_step_key", [...PRE_PROCUREMENT_STEP_KEYS])
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -127,20 +131,15 @@ export default function PreProcurementPage() {
 
   const handleCompletePreProcurement = useCallback(async () => {
     if (!prForAction) return;
-    const { error } = await supabase
-      .from("purchase_requests")
-      .update({
-        status: "ready_for_rfq_bidding",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", prForAction.id);
-    if (error) {
-      toast.error(error.message);
+    try {
+      await advanceStep(prForAction.id);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to advance step");
       return;
     }
     setCompleteModalOpen(false);
     setPrForAction(null);
-    toast.success("PR moved to Ready for RFQ/Bidding");
+    toast.success("PR advanced to next step");
     void fetchData();
   }, [prForAction, fetchData]);
 
@@ -167,7 +166,7 @@ export default function PreProcurementPage() {
             </div>
             <p className="app__empty_state_title">No purchase requests</p>
             <p className="app__empty_state_description">
-              No purchase requests with status For Procurement for fiscal year{" "}
+              No purchase requests at Pre-Procurement for fiscal year{" "}
               {CURRENT_FISCAL_YEAR}. Mark PRs as &quot;For Procurement&quot; on
               the Purchase Requests page first.
             </p>

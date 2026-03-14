@@ -278,3 +278,48 @@ export const PPMP_PROCUREMENT_MODES = [
   "others",
 ] as const;
 export type PPMPProcurementMode = (typeof PPMP_PROCUREMENT_MODES)[number];
+
+/** Procurement mode keys (snake_case) for workflow config */
+export const PROCUREMENT_MODE_KEYS = [
+  "competitive_bidding",
+  "negotiated_procurement",
+  "small_value_procurement",
+  "direct_contracting",
+  "repeat_order",
+  "agency_to_agency",
+] as const;
+export type ProcurementModeKey = (typeof PROCUREMENT_MODE_KEYS)[number];
+
+/** Step keys for Pre-Procurement page */
+export const PRE_PROCUREMENT_STEP_KEYS = ["pre_procurement"] as const;
+
+/** Step keys for RFQ / Bidding page */
+export const RFQ_BIDDING_STEP_KEYS = [
+  "rfq_preparation",
+  "advertisement_invitation",
+  "pre_bid_conference",
+  "bid_submission",
+  "bid_opening",
+  "negotiation",
+  "request_proposal",
+  "verify_previous_contract",
+  "coordination",
+] as const;
+
+/** Step keys for Bid Evaluation page */
+export const BID_EVALUATION_STEP_KEYS = [
+  "bid_evaluation",
+  "evaluation",
+  "abstract_of_quotations",
+  "technical_evaluation",
+  "bac_recommendation",
+] as const;
+
+/** Step keys for Notice of Award page */
+export const NOTICE_OF_AWARD_STEP_KEYS = [
+  "notice_of_award",
+  "notice_of_award_agreement",
+] as const;
+
+/** Step key for Purchase Orders page */
+export const PURCHASE_ORDER_STEP_KEY = "purchase_order";

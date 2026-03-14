@@ -179,6 +179,7 @@ export interface PurchaseRequest {
   reference_number: string | null;
   created_at: string;
   updated_at: string;
+  current_step_key?: string | null;
   funds_certified_by?: number | null;
   funds_certified_date?: string | null;
   hope_approved_by?: number | null;
@@ -196,6 +197,28 @@ export interface PurchaseRequest {
   award_amount?: number | null;
   noa_date?: string | null;
   delivery_date?: string | null;
+}
+
+/** Row in procurement_mode_workflows (config table) */
+export interface ProcurementModeWorkflow {
+  id: number;
+  procurement_mode: string;
+  step_key: string;
+  step_name: string;
+  sequence: number;
+}
+
+/** Row in procurement_steps (instance table) */
+export interface ProcurementStep {
+  id: number;
+  purchase_request_id: number;
+  step_key: string;
+  step_name: string;
+  status: "pending" | "in_progress" | "completed" | "skipped";
+  assigned_to: number | null;
+  completed_at: string | null;
+  sequence: number;
+  notes: string | null;
 }
 
 /** Purchase Request Item - links PR to specific lot/item via indices */

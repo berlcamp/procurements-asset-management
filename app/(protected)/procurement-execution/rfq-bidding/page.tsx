@@ -19,7 +19,11 @@ import { TableSkeleton } from "@/components/TableSkeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CURRENT_FISCAL_YEAR } from "@/lib/constants";
+import {
+  CURRENT_FISCAL_YEAR,
+  RFQ_BIDDING_STEP_KEYS,
+} from "@/lib/constants";
+import { advanceStep } from "@/lib/procurement/workflow";
 import { supabase } from "@/lib/supabase/client";
 import type { PurchaseRequest } from "@/types/database";
 import {
@@ -87,7 +91,7 @@ export default function RfqBiddingPage() {
       .select(
         "*, creator:users!created_by(id, name), ppmp_row:ppmp_rows!ppmp_row_id(id, general_description, ppmp_id, ppmp:ppmp!ppmp_id(fiscal_year, school_id, office_id, school:schools!school_id(id, name), office:offices!office_id(id, name)))"
       )
-      .eq("status", "ready_for_rfq_bidding")
+      .in("current_step_key", [...RFQ_BIDDING_STEP_KEYS])
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -137,20 +141,15 @@ export default function RfqBiddingPage() {
 
   const handleRecordSubmissions = useCallback(async () => {
     if (!prForAction) return;
-    const { error } = await supabase
-      .from("purchase_requests")
-      .update({
-        status: "for_bid_evaluation",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", prForAction.id);
-    if (error) {
-      toast.error(error.message);
+    try {
+      await advanceStep(prForAction.id);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to advance step");
       return;
     }
     setRecordSubmissionsModalOpen(false);
     setPrForAction(null);
-    toast.success("PR moved to Bid Evaluation");
+    toast.success("PR advanced to next step");
     void fetchData();
   }, [prForAction, fetchData]);
 
@@ -177,7 +176,7 @@ export default function RfqBiddingPage() {
             </div>
             <p className="app__empty_state_title">No procurement activities</p>
             <p className="app__empty_state_description">
-              No purchase requests ready for RFQ/bidding for fiscal year{" "}
+              No purchase requests at RFQ/Bidding for fiscal year{" "}
               {CURRENT_FISCAL_YEAR}. Complete pre-procurement first.
             </p>
             <Button variant="green" className="mt-4" asChild>
